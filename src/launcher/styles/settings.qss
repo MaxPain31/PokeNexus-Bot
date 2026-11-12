@@ -1,0 +1,577 @@
+QWidget {
+    color: #E6EDF7;
+    background: transparent;
+    font-family: "Segoe UI";
+    font-size: 12px;
+}
+
+/* Native Windows combo-box metrics need points; 9pt matches 12px at 96 DPI. */
+QComboBox {
+    font-size: 9pt;
+}
+
+QDialog#settings_window {
+    background: transparent;
+}
+
+QFrame#settings_container {
+    background-color: rgba(17, 24, 39, {{BACKGROUND_ALPHA:238}});
+    border: 1px solid rgba(91, 124, 161, 145);
+    border-radius: 13px;
+}
+
+QWidget#settings_header {
+    background: transparent;
+}
+
+QLabel#settings_header_icon {
+    background-color: rgba(56, 189, 248, 22);
+    border: 1px solid rgba(125, 211, 252, 55);
+    border-radius: 10px;
+}
+
+QLabel#settings_live_badge {
+    color: #5EEAD4;
+    background-color: rgba(45, 212, 191, 18);
+    border: 1px solid rgba(45, 212, 191, 65);
+    border-radius: 5px;
+    padding: 4px 8px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+QLabel#settings_page_description {
+    color: #A6B7CD;
+    font-size: 11px;
+    padding-left: 1px;
+}
+
+QLabel#settings_save_hint {
+    color: #A6B7CD;
+    font-size: 10px;
+}
+
+QFrame#settings_header_divider {
+    color: rgba(91, 124, 161, 70);
+    background-color: rgba(91, 124, 161, 70);
+    border: none;
+    max-height: 1px;
+}
+
+QScrollArea#settings_scroll_area {
+    background: transparent;
+    border: none;
+}
+
+QWidget#settings_content,
+QScrollArea#settings_scroll_area QWidget#qt_scrollarea_viewport {
+    background: transparent;
+}
+
+QScrollBar:vertical {
+    width: 8px;
+    margin: 2px 0;
+    background: transparent;
+}
+
+QScrollBar::handle:vertical {
+    min-height: 24px;
+    background: #465A75;
+    border-radius: 3px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #66829F;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical,
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    height: 0;
+    background: transparent;
+}
+
+QLabel#settings_title {
+    color: #F9FAFB;
+    font-size: 22px;
+    font-weight: 700;
+    background: transparent;
+    padding-left: 1px;
+}
+
+QLabel#settings_subtitle {
+    color: #A6B7CD;
+    font-size: 12px;
+    background: transparent;
+    padding-left: 2px;
+}
+
+QFrame#settings_section,
+QFrame#auto_catching_configuration {
+    background-color: rgba(255, 255, 255, {{BACKGROUND_ALPHA:7}});
+    border: 1px solid rgba(91, 124, 161, 65);
+    border-radius: 10px;
+}
+
+QLabel#settings_section_title {
+    color: #E0F2FE;
+    font-size: 13px;
+    font-weight: 600;
+    background: transparent;
+    padding: 0 0 3px;
+}
+
+QWidget#settings_tab_bar {
+    background-color: rgba(255, 255, 255, {{BACKGROUND_ALPHA:10}});
+    border: 1px solid rgba(91, 124, 161, 65);
+    border-radius: 8px;
+}
+
+QPushButton#settings_tab_button {
+    color: #A6B7CD;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    padding: 6px 3px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+QPushButton#settings_tab_button:hover {
+    color: #F9FAFB;
+    background-color: rgba(255, 255, 255, 18);
+}
+
+QPushButton#settings_tab_button:checked {
+    color: #7DD3FC;
+    background-color: rgba(56, 189, 248, 24);
+}
+
+QPushButton#settings_tab_button:focus {
+    border-color: #7DD3FC;
+}
+
+QFrame#settings_tab_indicator {
+    background-color: #38BDF8;
+    border: none;
+    border-radius: 1px;
+}
+
+QToolButton#auto_walk_advanced_toggle,
+QToolButton#desired_pokemon_advanced_toggle,
+QToolButton#elite_pokemon_advanced_toggle {
+    color: #C5D3E5;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 4px 8px;
+}
+
+QToolButton#auto_walk_advanced_toggle:hover,
+QToolButton#desired_pokemon_advanced_toggle:hover,
+QToolButton#elite_pokemon_advanced_toggle:hover {
+    color: #F9FAFB;
+    background: rgba(255, 255, 255, 18);
+    border-radius: 4px;
+}
+
+QLabel#auto_walk_setting_label {
+    color: #C5D3E5;
+    background: transparent;
+    font-size: 12px;
+}
+
+QLabel#desired_pokemon_setting_label,
+QLabel#elite_pokemon_setting_label,
+QLabel#auto_catching_setting_label,
+QLabel#overlay_transparency_label {
+    color: #C5D3E5;
+    background: transparent;
+    font-size: 12px;
+}
+
+QLabel#settings_help {
+    color: #A6B7CD;
+    background: transparent;
+    font-size: 11px;
+}
+
+QSlider#overlay_transparency_slider {
+    min-height: 28px;
+}
+
+QSlider#overlay_transparency_slider::groove:horizontal {
+    height: 6px;
+    background-color: #22324A;
+    border: 1px solid #465A75;
+    border-radius: 3px;
+}
+
+QSlider#overlay_transparency_slider::sub-page:horizontal {
+    background-color: #2DD4BF;
+    border: 1px solid #2DD4BF;
+    border-radius: 3px;
+}
+
+QSlider#overlay_transparency_slider::handle:horizontal {
+    width: 16px;
+    margin: -6px 0;
+    background-color: #7DD3FC;
+    border: 1px solid #BAE6FD;
+    border-radius: 8px;
+}
+
+QSlider#overlay_transparency_slider::handle:horizontal:hover,
+QSlider#overlay_transparency_slider::handle:horizontal:pressed,
+QSlider#overlay_transparency_slider::handle:horizontal:focus {
+    background-color: #BAE6FD;
+    border-color: #FFFFFF;
+}
+
+QSpinBox#overlay_transparency_spin {
+    color: #F9FAFB;
+    background-color: rgba(15, 23, 42, 235);
+    border: 1px solid rgba(91, 124, 161, 110);
+    border-radius: 7px;
+    padding: 4px 8px;
+    min-height: 18px;
+}
+
+QLabel#auto_catching_description {
+    color: #A6B7CD;
+    background: transparent;
+    font-size: 11px;
+    padding: 0 8px 3px;
+}
+
+QLabel#auto_fishing_description,
+QLabel#auto_fishing_fallback_description {
+    color: #A6B7CD;
+    background: transparent;
+    font-size: 11px;
+    padding: 2px 8px 3px;
+}
+
+QSpinBox#auto_catching_hp_spin,
+QSpinBox#auto_fishing_reaction_lead_spin,
+QSpinBox#auto_fishing_space_hold_spin,
+QComboBox#auto_catching_item_selection {
+    color: #F9FAFB;
+    background-color: rgba(15, 23, 42, 235);
+    border: 1px solid rgba(91, 124, 161, 110);
+    border-radius: 7px;
+    padding: 6px 10px;
+    min-width: 88px;
+    min-height: 20px;
+}
+
+QComboBox#auto_catching_item_selection QAbstractItemView {
+    color: #F9FAFB;
+    background-color: rgba(17, 24, 39, 250);
+    border: 1px solid rgba(91, 124, 161, 110);
+    selection-background-color: #28566A;
+}
+
+QDoubleSpinBox {
+    color: #F9FAFB;
+    background-color: rgba(15, 23, 42, 235);
+    border: 1px solid rgba(91, 124, 161, 110);
+    border-radius: 7px;
+    padding: 6px 10px;
+    min-width: 88px;
+    min-height: 20px;
+}
+
+QLineEdit#desired_pokemon_input {
+    color: #F9FAFB;
+    background-color: rgba(15, 23, 42, 235);
+    border: 1px solid rgba(91, 124, 161, 110);
+    border-radius: 7px;
+    padding: 6px 10px;
+}
+
+QLineEdit#desired_pokemon_input:hover,
+QLineEdit#desired_pokemon_input:focus {
+    border-color: rgba(56, 189, 248, 180);
+}
+
+QFrame#desired_pokemon_popup {
+    color: #F9FAFB;
+    background-color: rgba(17, 24, 39, 250);
+    border: 1px solid rgba(91, 124, 161, 145);
+    border-radius: 11px;
+}
+
+QLabel#desired_pokemon_popup_title {
+    color: #F9FAFB;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QLabel#desired_pokemon_selection_count {
+    color: #7DD3FC;
+    background: transparent;
+    font-size: 11px;
+}
+
+QLineEdit#desired_pokemon_search {
+    color: #F9FAFB;
+    background-color: rgba(15, 23, 42, 230);
+    border: 1px solid rgba(91, 124, 161, 110);
+    border-radius: 7px;
+    padding: 7px 10px;
+}
+
+QComboBox#desired_pokemon_rarity_filter {
+    color: #F9FAFB;
+    background-color: rgba(15, 23, 42, 230);
+    border: 1px solid rgba(91, 124, 161, 110);
+    border-radius: 7px;
+    padding: 6px 10px;
+}
+
+QComboBox#desired_pokemon_rarity_filter QAbstractItemView {
+    color: #F9FAFB;
+    background-color: rgba(17, 24, 39, 250);
+    border: 1px solid rgba(91, 124, 161, 110);
+    selection-background-color: #28566A;
+}
+
+QCheckBox#desired_pokemon_select_all {
+    color: #E5E7EB;
+    background: transparent;
+    spacing: 7px;
+    font-size: 12px;
+}
+
+QListWidget#desired_pokemon_list {
+    color: #E5E7EB;
+    background-color: rgba(15, 23, 42, 220);
+    border: 1px solid rgba(91, 124, 161, 65);
+    border-radius: 7px;
+    outline: none;
+}
+
+QListWidget#desired_pokemon_list::item {
+    min-height: 28px;
+    padding: 4px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 16);
+}
+
+QListWidget#desired_pokemon_list::item:hover {
+    background-color: rgba(56, 189, 248, 35);
+}
+
+QListWidget#desired_pokemon_list::item:selected {
+    background-color: rgba(56, 189, 248, 55);
+}
+
+QLineEdit#ringtone_path {
+    color: #A6B7CD;
+    background-color: rgba(15, 23, 42, 235);
+    border: 1px solid rgba(91, 124, 161, 90);
+    border-radius: 7px;
+    padding: 6px 9px;
+    font-size: 11px;
+}
+
+QPushButton#ringtone_browse_button {
+    color: #F9FAFB;
+    background-color: #1B293E;
+    border: 1px solid #3B4D67;
+    border-radius: 7px;
+    padding: 6px 10px;
+}
+
+QPushButton#ringtone_browse_button:hover {
+    background-color: #263952;
+    border-color: #66829F;
+}
+
+QRadioButton {
+    color: #F9FAFB;
+    spacing: 8px;
+    background: transparent;
+}
+
+QRadioButton::indicator {
+    width: 14px;
+    height: 14px;
+    border: 1px solid #66829F;
+    border-radius: 7px;
+    background-color: rgba(17, 24, 39, 210);
+}
+
+QRadioButton::indicator:checked {
+    border: 1px solid #2DD4BF;
+    background-color: #2DD4BF;
+}
+
+QLabel#unavailable_setting {
+    color: #8295AE;
+    background: rgba(255, 255, 255, {{BACKGROUND_ALPHA:7}});
+    border: 1px solid rgba(91, 124, 161, 45);
+    border-radius: 8px;
+    padding: 7px 10px;
+}
+
+QDialogButtonBox#settings_button_box QPushButton {
+    color: #F9FAFB;
+    background-color: #1B293E;
+    border: 1px solid #3B4D67;
+    border-radius: 7px;
+    padding: 7px 12px;
+    min-width: 62px;
+}
+
+QDialogButtonBox#settings_button_box QPushButton:hover {
+    background-color: #263952;
+    border-color: #66829F;
+}
+
+QDialogButtonBox#settings_button_box QPushButton#settings_ok_button {
+    background-color: #2DD4BF;
+    color: #062D2A;
+    border-color: #2DD4BF;
+    font-weight: 600;
+}
+
+QDialogButtonBox#settings_button_box QPushButton#settings_ok_button:hover {
+    background-color: #5EEAD4;
+    border-color: #5EEAD4;
+}
+
+QLabel#desired_pokemon_empty_state {
+    color: #FCD34D;
+    font-size: 11px;
+    padding: 4px;
+}
+
+QLineEdit#desired_pokemon_input:disabled,
+QLineEdit#ringtone_path:disabled,
+QSpinBox#auto_catching_hp_spin:disabled,
+QSpinBox#auto_fishing_reaction_lead_spin:disabled,
+QSpinBox#auto_fishing_space_hold_spin:disabled,
+QComboBox#auto_catching_item_selection:disabled,
+QDoubleSpinBox:disabled {
+    color: #8295AE;
+    background-color: rgba(15, 23, 42, 120);
+    border-color: rgba(91, 124, 161, 45);
+}
+
+QLabel#auto_walk_setting_label:disabled,
+QRadioButton:disabled {
+    color: #8295AE;
+}
+
+QRadioButton::indicator:disabled {
+    border-color: #46566E;
+    background-color: #344156;
+}
+
+QLineEdit#desired_pokemon_input:focus,
+QLineEdit#desired_pokemon_search:focus,
+QLineEdit#ringtone_path:focus,
+QSpinBox#auto_catching_hp_spin:focus,
+QSpinBox#auto_fishing_reaction_lead_spin:focus,
+QSpinBox#auto_fishing_space_hold_spin:focus,
+QSpinBox#overlay_transparency_spin:focus,
+QComboBox#auto_catching_item_selection:focus,
+QComboBox#desired_pokemon_rarity_filter:focus,
+QDoubleSpinBox:focus {
+    border-color: #7DD3FC;
+}
+
+QToolButton#auto_walk_advanced_toggle:focus,
+QToolButton#desired_pokemon_advanced_toggle:focus,
+QToolButton#elite_pokemon_advanced_toggle:focus {
+    color: #7DD3FC;
+    background-color: rgba(56, 189, 248, 24);
+    border-radius: 5px;
+}
+
+QPushButton#ringtone_browse_button:focus,
+QDialogButtonBox#settings_button_box QPushButton:focus {
+    border-color: #BAE6FD;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 24px;
+}
+
+QComboBox::down-arrow {
+    image: url("{{ASSETS_DIR}}/chevron-down.svg");
+    width: 12px;
+    height: 12px;
+}
+
+QSpinBox::up-button,
+QDoubleSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 20px;
+    background-color: #22324A;
+    border-left: 1px solid #334155;
+    border-top-right-radius: 6px;
+}
+
+QSpinBox::down-button,
+QDoubleSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 20px;
+    background-color: #22324A;
+    border-left: 1px solid #334155;
+    border-bottom-right-radius: 6px;
+}
+
+QSpinBox::up-button:hover,
+QSpinBox::down-button:hover,
+QDoubleSpinBox::up-button:hover,
+QDoubleSpinBox::down-button:hover {
+    background-color: #304964;
+}
+
+QSpinBox::up-arrow,
+QDoubleSpinBox::up-arrow {
+    image: url("{{ASSETS_DIR}}/chevron-up.svg");
+    width: 10px;
+    height: 10px;
+}
+
+QSpinBox::down-arrow,
+QDoubleSpinBox::down-arrow {
+    image: url("{{ASSETS_DIR}}/chevron-down.svg");
+    width: 10px;
+    height: 10px;
+}
+
+QCheckBox#desired_pokemon_select_all::indicator {
+    width: 16px;
+    height: 16px;
+    background-color: #162136;
+    border: 1px solid #66829F;
+    border-radius: 3px;
+}
+
+QCheckBox#desired_pokemon_select_all::indicator:checked {
+    background-color: #2DD4BF;
+    border-color: #2DD4BF;
+    image: url("{{ASSETS_DIR}}/check.svg");
+}
+
+QCheckBox#desired_pokemon_select_all:disabled {
+    color: #8295AE;
+}
+
+QToolTip {
+    color: #E6EDF7;
+    background-color: #162136;
+    border: 1px solid #465A75;
+    padding: 6px 9px;
+}

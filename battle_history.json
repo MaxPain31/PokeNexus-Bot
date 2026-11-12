@@ -1,0 +1,3134 @@
+{
+  "version": 1,
+  "observations": [
+    {
+      "player": "clefable",
+      "opponent": "[e] drifloon",
+      "move": "Moonblast",
+      "count": 3,
+      "total_damage": 24.0
+    },
+    {
+      "player": "clefable",
+      "opponent": "[e] exploud",
+      "move": "Moonblast",
+      "count": 5,
+      "total_damage": 29.0
+    },
+    {
+      "player": "clefable",
+      "opponent": "[e] golem",
+      "move": "Moonblast",
+      "count": 2,
+      "total_damage": 11.0
+    },
+    {
+      "player": "clefable",
+      "opponent": "[e] nidorina",
+      "move": "Moonblast",
+      "count": 6,
+      "total_damage": 31.0
+    },
+    {
+      "player": "clefable",
+      "opponent": "[e] palossand",
+      "move": "Moonblast",
+      "count": 3,
+      "total_damage": 23.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] arbok",
+      "move": "Earthquake",
+      "count": 1,
+      "total_damage": 5.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] butterfree",
+      "move": "Night Shade",
+      "count": 2,
+      "total_damage": 16.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] butterfree-halloween",
+      "move": "Night Shade",
+      "count": 1,
+      "total_damage": 9.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] electrode",
+      "move": "Stomping Tantrum",
+      "count": 3,
+      "total_damage": 85.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] exploud",
+      "move": "Hammer Arm",
+      "count": 10,
+      "total_damage": 150.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] fearow-halloween",
+      "move": "Hammer Arm",
+      "count": 1,
+      "total_damage": 17.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] gengar",
+      "move": "damage | Earthquane",
+      "count": 1,
+      "total_damage": 18.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] gengar",
+      "move": "Earthquake",
+      "count": 1,
+      "total_damage": 43.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] golem",
+      "move": "Stomping Tantrum",
+      "count": 2,
+      "total_damage": 24.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] golem-alola",
+      "move": "Stomping Tantrum",
+      "count": 4,
+      "total_damage": 88.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] golem-alola-halloween",
+      "move": "Earthquake",
+      "count": 2,
+      "total_damage": 52.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] kingler",
+      "move": "damage | Earthquane",
+      "count": 1,
+      "total_damage": 14.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] marill",
+      "move": "Stomping Tantrum",
+      "count": 3,
+      "total_damage": 30.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] nidorina",
+      "move": "Stomping Tantrum",
+      "count": 4,
+      "total_damage": 75.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] nidorino",
+      "move": "Earthquake",
+      "count": 3,
+      "total_damage": 54.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] palossand",
+      "move": "Night Shade",
+      "count": 4,
+      "total_damage": 32.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] pidgeot",
+      "move": "n Dig. Praeriesice eavane",
+      "count": 1,
+      "total_damage": 10.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] raticate-alola",
+      "move": "Hammer Arm",
+      "count": 3,
+      "total_damage": 106.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] raticate-alola-halloween",
+      "move": "Hammer Arm",
+      "count": 1,
+      "total_damage": 50.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] scatterbug",
+      "move": "Night Shade",
+      "count": 7,
+      "total_damage": 53.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "[e] shedinja",
+      "move": "Night Shade",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "butterfree",
+      "move": "Night Shade",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "butterfree-halloween",
+      "move": "Night Shade",
+      "count": 1,
+      "total_damage": 60.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "crustle",
+      "move": "Earthquake",
+      "count": 26,
+      "total_damage": 2600.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "diglett-alola",
+      "move": "Earthquake",
+      "count": 19,
+      "total_damage": 1900.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "drifloon",
+      "move": "Night Shade",
+      "count": 3,
+      "total_damage": 100.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "drifloon-halloween",
+      "move": "Night Shade",
+      "count": 3,
+      "total_damage": 100.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "electrode",
+      "move": "Stomping Tantrum",
+      "count": 1,
+      "total_damage": 58.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "elite nidorino",
+      "move": "Earthquake",
+      "count": 1,
+      "total_damage": 22.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "exploud",
+      "move": "Hammer Arm",
+      "count": 43,
+      "total_damage": 3449.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "fearow",
+      "move": "Hammer Arm",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "gastrodon",
+      "move": "Stomping Tantrum",
+      "count": 26,
+      "total_damage": 2317.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "gengar",
+      "move": "Earthquake",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "hoothoot",
+      "move": "Hammer Arm",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "litleo",
+      "move": "Earthquake",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "magneton",
+      "move": "Earthquake",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "muk-alola",
+      "move": "Earthquake",
+      "count": 1,
+      "total_damage": 15.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "muk-alola",
+      "move": "Stomping Tantrum",
+      "count": 1,
+      "total_damage": 3.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "nidorina",
+      "move": "Earthquake",
+      "count": 20,
+      "total_damage": 2000.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "pidgeot",
+      "move": "Hammer Arm",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "pidgeot-halloween",
+      "move": "Hammer Arm",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "raticate-alola",
+      "move": "Hammer Arm",
+      "count": 2,
+      "total_damage": 18.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "shedinja",
+      "move": "Night Shade",
+      "count": 8,
+      "total_damage": 800.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "skuntank",
+      "move": "Earthquake",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "turtonator",
+      "move": "move fai Stomping vanwuns",
+      "count": 1,
+      "total_damage": 93.0
+    },
+    {
+      "player": "golurk",
+      "opponent": "turtonator",
+      "move": "Stomping Tantrum",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] arbok",
+      "move": "Def by 1. Psychic",
+      "count": 1,
+      "total_damage": 40.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] arbok",
+      "move": "Psychic",
+      "count": 5,
+      "total_damage": 238.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] ariados",
+      "move": "Def by 1. Psychic",
+      "count": 1,
+      "total_damage": 43.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] ariados",
+      "move": "Psychic",
+      "count": 5,
+      "total_damage": 157.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] azurill",
+      "move": "Def by 1. Psychic",
+      "count": 1,
+      "total_damage": 26.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] azurill",
+      "move": "Psychic",
+      "count": 3,
+      "total_damage": 74.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] butterfree",
+      "move": "Thunderbolt",
+      "count": 3,
+      "total_damage": 71.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] butterfree-halloween",
+      "move": "Thunderbolt",
+      "count": 2,
+      "total_damage": 80.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] drifloon",
+      "move": "Thunderbolt",
+      "count": 1,
+      "total_damage": 93.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] electrode",
+      "move": "Def by 1. Psychic",
+      "count": 3,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] electrode",
+      "move": "Psychic",
+      "count": 14,
+      "total_damage": 372.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] emolga",
+      "move": "Psychic",
+      "count": 4,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] exploud",
+      "move": "Def by 1. Psychic",
+      "count": 4,
+      "total_damage": 147.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] exploud",
+      "move": "Def by 1. Psycluc",
+      "count": 1,
+      "total_damage": 15.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] exploud",
+      "move": "Psychic",
+      "count": 10,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] fearow",
+      "move": "Thunderbolt",
+      "count": 3,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] fearow-halloween",
+      "move": "Thunderbolt",
+      "count": 1,
+      "total_damage": 32.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] gengar",
+      "move": "Def by 1. SYCrne",
+      "count": 2,
+      "total_damage": 78.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] gengar",
+      "move": "Psychic",
+      "count": 3,
+      "total_damage": 119.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] gengar-halloween",
+      "move": "Psychic",
+      "count": 3,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] gloom",
+      "move": "Psychic",
+      "count": 3,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] golem",
+      "move": "Surf",
+      "count": 4,
+      "total_damage": 165.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] golem-alola",
+      "move": "Surf",
+      "count": 2,
+      "total_damage": 177.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] golem-alola-halloween",
+      "move": "Surf",
+      "count": 1,
+      "total_damage": 84.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] gyarados",
+      "move": "Thunderbolt",
+      "count": 3,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] haunter",
+      "move": "Psychic",
+      "count": 5,
+      "total_damage": 273.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] haunter-halloween",
+      "move": "Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] hoothoot",
+      "move": "HerUurracrre",
+      "count": 1,
+      "total_damage": 43.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] hoothoot",
+      "move": "Thunderbolt",
+      "count": 5,
+      "total_damage": 186.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] kingler",
+      "move": "Thunderbolt",
+      "count": 2,
+      "total_damage": 86.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] liepard",
+      "move": "Draco Meteor",
+      "count": 1,
+      "total_damage": 44.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] liepard",
+      "move": "viacy wietcul",
+      "count": 1,
+      "total_damage": 44.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] magcargo",
+      "move": "Surf",
+      "count": 5,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] marill",
+      "move": "HerUurracrre",
+      "count": 1,
+      "total_damage": 24.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] marill",
+      "move": "Thunderbolt",
+      "count": 3,
+      "total_damage": 79.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] nidorina",
+      "move": "Def by 1. Psychic",
+      "count": 1,
+      "total_damage": 30.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] nidorina",
+      "move": "Psychic",
+      "count": 2,
+      "total_damage": 65.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] nidorino",
+      "move": "Def by 1. Psychic",
+      "count": 2,
+      "total_damage": 83.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] nidorino",
+      "move": "Psychic",
+      "count": 2,
+      "total_damage": 18.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] palossand",
+      "move": "Surf",
+      "count": 4,
+      "total_damage": 120.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] persian-alola",
+      "move": "Draco Meteor",
+      "count": 1,
+      "total_damage": 40.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] pidgeot",
+      "move": "Thunderbolt",
+      "count": 11,
+      "total_damage": 375.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] raticate-alola",
+      "move": "Draco Meteor",
+      "count": 2,
+      "total_damage": 120.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] raticate-alola-halloween",
+      "move": "Draco Meteor",
+      "count": 1,
+      "total_damage": 33.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] tentacruel",
+      "move": "Def by 1. Psychic",
+      "count": 1,
+      "total_damage": 87.0
+    },
+    {
+      "player": "latios",
+      "opponent": "[e] tentacruel",
+      "move": "Psychic",
+      "count": 3,
+      "total_damage": 53.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok",
+      "move": "1 lt Psycluc",
+      "count": 5,
+      "total_damage": 500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok",
+      "move": "bwelhy t Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok",
+      "move": "Def by 1. Psychic",
+      "count": 62,
+      "total_damage": 6200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok",
+      "move": "Def by 1. Psycine",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok",
+      "move": "Def by 1. Psycluc",
+      "count": 16,
+      "total_damage": 1600.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok",
+      "move": "hayt Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok",
+      "move": "lt Psychic",
+      "count": 10,
+      "total_damage": 1000.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok",
+      "move": "mt Psychic",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok",
+      "move": "Psychic",
+      "count": 404,
+      "total_damage": 40400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok",
+      "move": "Psycine",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok",
+      "move": "Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok-halloween",
+      "move": "Def by 1. Psychic",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok-halloween",
+      "move": "Def by 1. Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok-halloween",
+      "move": "lt Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok-halloween",
+      "move": "mt Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "arbok-halloween",
+      "move": "Psychic",
+      "count": 37,
+      "total_damage": 3700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ariados",
+      "move": "1 lt Psycine",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ariados",
+      "move": "1 lt Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ariados",
+      "move": "an Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ariados",
+      "move": "Def by 1. Psychic",
+      "count": 15,
+      "total_damage": 1500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ariados",
+      "move": "Def by 1. Psycluc",
+      "count": 11,
+      "total_damage": 1100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ariados",
+      "move": "lt Psychic",
+      "count": 5,
+      "total_damage": 500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ariados",
+      "move": "mt Psychic",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ariados",
+      "move": "Psychic",
+      "count": 116,
+      "total_damage": 11600.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ariados-halloween",
+      "move": "Def by 1. Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ariados-halloween",
+      "move": "mond Psyclie",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ariados-halloween",
+      "move": "Psychic",
+      "count": 11,
+      "total_damage": 1100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "azurill",
+      "move": "Def by 1. Psychic",
+      "count": 14,
+      "total_damage": 1400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "azurill",
+      "move": "Psychic",
+      "count": 13,
+      "total_damage": 1300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "banette",
+      "move": "Def by 1. Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "banette",
+      "move": "Psychic",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "beautifly",
+      "move": "Thunderbolt",
+      "count": 11,
+      "total_damage": 1100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "beedrill",
+      "move": "Def by 1. Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "beedrill",
+      "move": "Psychic",
+      "count": 9,
+      "total_damage": 900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "bibarel",
+      "move": "HerUurracrre",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "bibarel",
+      "move": "Thunderbolt",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "butterfree",
+      "move": "HerUurracrre",
+      "count": 12,
+      "total_damage": 1200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "butterfree",
+      "move": "Thunaerbeole",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "butterfree",
+      "move": "Thunderbolt",
+      "count": 585,
+      "total_damage": 58500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "butterfree-halloween",
+      "move": "Thunderbolt",
+      "count": 55,
+      "total_damage": 5500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "carnivine",
+      "move": "Psychic",
+      "count": 1,
+      "total_damage": 86.0
+    },
+    {
+      "player": "latios",
+      "opponent": "castform",
+      "move": "Psychic",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "charjabug",
+      "move": "1 lt Psychic.",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "charjabug",
+      "move": "Def by 1. Psychic",
+      "count": 15,
+      "total_damage": 1500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "charjabug",
+      "move": "Def by 1. Psycine",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "charjabug",
+      "move": "Def by 1. Psycluc",
+      "count": 11,
+      "total_damage": 1100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "charjabug",
+      "move": "mt Psychic",
+      "count": 5,
+      "total_damage": 500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "charjabug",
+      "move": "mt Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "charjabug",
+      "move": "Psychic",
+      "count": 138,
+      "total_damage": 13800.0
+    },
+    {
+      "player": "latios",
+      "opponent": "charjabug",
+      "move": "Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "charjabug-halloween",
+      "move": "Def by 1. Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "charjabug-halloween",
+      "move": "Psychic",
+      "count": 8,
+      "total_damage": 800.0
+    },
+    {
+      "player": "latios",
+      "opponent": "chatot",
+      "move": "HerUurracrre",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "cherubi",
+      "move": "Psychic",
+      "count": 22,
+      "total_damage": 2200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "cofagrigus",
+      "move": "1 lt Psychic.",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "cofagrigus",
+      "move": "Def by 1. Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "cofagrigus",
+      "move": "Psychic",
+      "count": 8,
+      "total_damage": 800.0
+    },
+    {
+      "player": "latios",
+      "opponent": "cofagrigus-halloween",
+      "move": "Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "combee",
+      "move": "Thunderbolt",
+      "count": 36,
+      "total_damage": 3600.0
+    },
+    {
+      "player": "latios",
+      "opponent": "corphish",
+      "move": "Thunderbolt",
+      "count": 8,
+      "total_damage": 800.0
+    },
+    {
+      "player": "latios",
+      "opponent": "deerling",
+      "move": "Psychic",
+      "count": 7,
+      "total_damage": 700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "drifloon",
+      "move": "HerUurracrre",
+      "count": 214,
+      "total_damage": 21400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "drifloon",
+      "move": "Thunderbolt",
+      "count": 747,
+      "total_damage": 74700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "drifloon-halloween",
+      "move": "HerUurracrre",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "drifloon-halloween",
+      "move": "Thunderbolt",
+      "count": 44,
+      "total_damage": 4400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ekans",
+      "move": "Def by 1. PsyCiune",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ekans",
+      "move": "Psychic",
+      "count": 14,
+      "total_damage": 1400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode",
+      "move": "1 lt Psychic.",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode",
+      "move": "an Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode",
+      "move": "Def by 1. Psychic",
+      "count": 254,
+      "total_damage": 25144.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode",
+      "move": "Def by 1. Psycine",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode",
+      "move": "Def by 1. Psycluc",
+      "count": 28,
+      "total_damage": 2800.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode",
+      "move": "Det by 1 Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode",
+      "move": "lt Psyche",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode",
+      "move": "mt Psychic",
+      "count": 10,
+      "total_damage": 1000.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode",
+      "move": "mt Psycluc",
+      "count": 5,
+      "total_damage": 500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode",
+      "move": "Psychic",
+      "count": 696,
+      "total_damage": 69548.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode",
+      "move": "Psycine",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode-halloween",
+      "move": "Def by 1. Psychic",
+      "count": 4,
+      "total_damage": 400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode-halloween",
+      "move": "Def by 1. Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode-halloween",
+      "move": "mt Psychic",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "electrode-halloween",
+      "move": "Psychic",
+      "count": 33,
+      "total_damage": 3300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "elite gyarados",
+      "move": "Thunderbolt",
+      "count": 3,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "elite nidorina",
+      "move": "Psychic",
+      "count": 2,
+      "total_damage": 67.0
+    },
+    {
+      "player": "latios",
+      "opponent": "elite nidorino",
+      "move": "Psychic",
+      "count": 4,
+      "total_damage": 123.0
+    },
+    {
+      "player": "latios",
+      "opponent": "elite scatterbug",
+      "move": "Psychic",
+      "count": 1,
+      "total_damage": 28.0
+    },
+    {
+      "player": "latios",
+      "opponent": "emolga",
+      "move": "1 lt Psychic.",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "emolga",
+      "move": "Def by 1. Psychic",
+      "count": 17,
+      "total_damage": 1700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "emolga",
+      "move": "Def by 1. Psycine",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "emolga",
+      "move": "Def by 1. Psycluc",
+      "count": 10,
+      "total_damage": 1000.0
+    },
+    {
+      "player": "latios",
+      "opponent": "emolga",
+      "move": "hayt Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "emolga",
+      "move": "lt Psyche",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "emolga",
+      "move": "mt Psychic",
+      "count": 4,
+      "total_damage": 400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "emolga",
+      "move": "mt Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "emolga",
+      "move": "Psychic",
+      "count": 99,
+      "total_damage": 9900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "emolga-halloween",
+      "move": "1 lt Psychic.",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "emolga-halloween",
+      "move": "Def by 1. Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "emolga-halloween",
+      "move": "Def by 1. Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "emolga-halloween",
+      "move": "Psychic",
+      "count": 8,
+      "total_damage": 800.0
+    },
+    {
+      "player": "latios",
+      "opponent": "exploud",
+      "move": "1 lt Psychic.",
+      "count": 7,
+      "total_damage": 700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "exploud",
+      "move": "Def by 1. Psychic",
+      "count": 282,
+      "total_damage": 26775.0
+    },
+    {
+      "player": "latios",
+      "opponent": "exploud",
+      "move": "Def by 1. Psycine",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "exploud",
+      "move": "Def by 1. Psycluc",
+      "count": 43,
+      "total_damage": 4300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "exploud",
+      "move": "mt Psychic",
+      "count": 9,
+      "total_damage": 900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "exploud",
+      "move": "mt Psycluc",
+      "count": 5,
+      "total_damage": 500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "exploud",
+      "move": "my Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "exploud",
+      "move": "Psychic",
+      "count": 744,
+      "total_damage": 72670.0
+    },
+    {
+      "player": "latios",
+      "opponent": "exploud-halloween",
+      "move": "Def by 1. Psychic",
+      "count": 5,
+      "total_damage": 500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "exploud-halloween",
+      "move": "Def by 1. Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "exploud-halloween",
+      "move": "mt Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "exploud-halloween",
+      "move": "mt Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "exploud-halloween",
+      "move": "Psychic",
+      "count": 33,
+      "total_damage": 3300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "exploud-halloween",
+      "move": "Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "fearow",
+      "move": "HerUurracrre",
+      "count": 11,
+      "total_damage": 1100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "fearow",
+      "move": "Thunderbolt",
+      "count": 536,
+      "total_damage": 53600.0
+    },
+    {
+      "player": "latios",
+      "opponent": "fearow-halloween",
+      "move": "Thunderbolt",
+      "count": 54,
+      "total_damage": 5400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "forretress",
+      "move": "Surf",
+      "count": 12,
+      "total_damage": 1200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "galvantula",
+      "move": "Def by 1. Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "galvantula",
+      "move": "mt Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "galvantula",
+      "move": "Psychic",
+      "count": 9,
+      "total_damage": 900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gastrodon",
+      "move": "Def by 1. Psychic",
+      "count": 13,
+      "total_damage": 956.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gastrodon",
+      "move": "Psychic",
+      "count": 25,
+      "total_damage": 1527.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar",
+      "move": "1 lt Psycine",
+      "count": 12,
+      "total_damage": 1200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar",
+      "move": "1 lt Psyclic.",
+      "count": 4,
+      "total_damage": 400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar",
+      "move": "1 lt Psycluc",
+      "count": 27,
+      "total_damage": 2700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar",
+      "move": "an Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar",
+      "move": "Def by 1. Psychic",
+      "count": 108,
+      "total_damage": 10800.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar",
+      "move": "Def by 1. Psycine",
+      "count": 9,
+      "total_damage": 900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar",
+      "move": "Def by 1. Psycluc",
+      "count": 81,
+      "total_damage": 8100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar",
+      "move": "Def by 1. SYCrne",
+      "count": 47,
+      "total_damage": 4700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar",
+      "move": "lt Psychic",
+      "count": 13,
+      "total_damage": 1300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar",
+      "move": "mt Psychic",
+      "count": 7,
+      "total_damage": 700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar",
+      "move": "Psychic",
+      "count": 796,
+      "total_damage": 79600.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar",
+      "move": "PsyCine",
+      "count": 13,
+      "total_damage": 1300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar",
+      "move": "Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar-halloween",
+      "move": "1 lt PsyCine",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar-halloween",
+      "move": "1 lt Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar-halloween",
+      "move": "Def by 1. Psychic",
+      "count": 9,
+      "total_damage": 900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar-halloween",
+      "move": "Def by 1. PsyCine",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar-halloween",
+      "move": "Def by 1. Psycluc",
+      "count": 8,
+      "total_damage": 800.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar-halloween",
+      "move": "Def by 1. SYCrne",
+      "count": 7,
+      "total_damage": 700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar-halloween",
+      "move": "lt Psychic",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar-halloween",
+      "move": "mt Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar-halloween",
+      "move": "Psychic",
+      "count": 64,
+      "total_damage": 6400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar-halloween",
+      "move": "PsyCine",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gengar-halloween",
+      "move": "Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gloom",
+      "move": "1 lt Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gloom",
+      "move": "Def by 1. Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gloom",
+      "move": "Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "golem",
+      "move": "Surf",
+      "count": 519,
+      "total_damage": 51900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "golem-alola",
+      "move": "Surf",
+      "count": 498,
+      "total_damage": 49800.0
+    },
+    {
+      "player": "latios",
+      "opponent": "golem-alola-halloween",
+      "move": "Surf",
+      "count": 43,
+      "total_damage": 4300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gourgeist",
+      "move": "Def by 1. Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gourgeist",
+      "move": "Def by 1. Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gourgeist",
+      "move": "Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gourgeist-large",
+      "move": "Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gourgeist-small",
+      "move": "Psychic",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gourgeist-super",
+      "move": "Def by 1. Psycine",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gourgeist-super",
+      "move": "Psychic",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gyarados",
+      "move": "Thunderbolt",
+      "count": 438,
+      "total_damage": 43800.0
+    },
+    {
+      "player": "latios",
+      "opponent": "gyarados-halloween",
+      "move": "Thunderbolt",
+      "count": 29,
+      "total_damage": 2900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter",
+      "move": "1 lt PsyCine",
+      "count": 9,
+      "total_damage": 900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter",
+      "move": "1 lt Psyclic.",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter",
+      "move": "1 lt Psycluc",
+      "count": 16,
+      "total_damage": 1600.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter",
+      "move": "1 lt PsyCrue",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter",
+      "move": "Def by 1. Psychic",
+      "count": 15,
+      "total_damage": 1500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter",
+      "move": "Def by 1. PsyCine",
+      "count": 11,
+      "total_damage": 1100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter",
+      "move": "Def by 1. Psycluc",
+      "count": 40,
+      "total_damage": 4000.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter",
+      "move": "Def by 1. SYCrne",
+      "count": 40,
+      "total_damage": 4000.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter",
+      "move": "Psychic",
+      "count": 369,
+      "total_damage": 36900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter",
+      "move": "PsyCine",
+      "count": 10,
+      "total_damage": 1000.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter",
+      "move": "Psycluc",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter-halloween",
+      "move": "1 lt PsyCine",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter-halloween",
+      "move": "1 lt Psycluc",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter-halloween",
+      "move": "Def by 1. PsyCine",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter-halloween",
+      "move": "Def by 1. Psycluc",
+      "count": 7,
+      "total_damage": 700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter-halloween",
+      "move": "Def by 1. SYCrne",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter-halloween",
+      "move": "Psychic",
+      "count": 40,
+      "total_damage": 4000.0
+    },
+    {
+      "player": "latios",
+      "opponent": "haunter-halloween",
+      "move": "PsyCine",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "hoothoot",
+      "move": "HerUurracrre",
+      "count": 6,
+      "total_damage": 600.0
+    },
+    {
+      "player": "latios",
+      "opponent": "hoothoot",
+      "move": "Thunderbolt",
+      "count": 423,
+      "total_damage": 42300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "hoothoot-halloween",
+      "move": "Thunderbolt",
+      "count": 40,
+      "total_damage": 4000.0
+    },
+    {
+      "player": "latios",
+      "opponent": "horsea",
+      "move": "Thunderbolt",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "horsea-halloween",
+      "move": "Thunderbolt",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "houndoom",
+      "move": "Surf",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "joltik",
+      "move": "Def by 1. Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "joltik",
+      "move": "Def by 1. PsyCine",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "joltik",
+      "move": "Def by 1. SYCrne",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "joltik",
+      "move": "mt Psyclie",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "joltik",
+      "move": "Psychic",
+      "count": 21,
+      "total_damage": 2100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "joltik-halloween",
+      "move": "mt Psyclie",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "kingler",
+      "move": "HerUurracrre",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "kingler",
+      "move": "Thunderbolt",
+      "count": 107,
+      "total_damage": 10700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "kingler-halloween",
+      "move": "Thunderbolt",
+      "count": 12,
+      "total_damage": 1200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "klinklang",
+      "move": "Surf",
+      "count": 11,
+      "total_damage": 1100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "klinklang",
+      "move": "Thunderbolt",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "klinklang-halloween",
+      "move": "Surf",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "kricketune",
+      "move": "Def by 1. Psychic",
+      "count": 24,
+      "total_damage": 2400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "kricketune",
+      "move": "Psychic",
+      "count": 27,
+      "total_damage": 2700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "liepard",
+      "move": "HerUurracrre",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "liepard",
+      "move": "Thunderbolt",
+      "count": 138,
+      "total_damage": 13800.0
+    },
+    {
+      "player": "latios",
+      "opponent": "liepard-halloween",
+      "move": "Draco Meteor",
+      "count": 14,
+      "total_damage": 1400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "liepard-halloween",
+      "move": "viauy wictcur",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "magcargo",
+      "move": "Surf",
+      "count": 507,
+      "total_damage": 50700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "magneton",
+      "move": "Surf",
+      "count": 15,
+      "total_damage": 1500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "magneton-halloween",
+      "move": "Surf",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "marill",
+      "move": "HerUurracrre",
+      "count": 19,
+      "total_damage": 1900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "marill",
+      "move": "Thunderbolt",
+      "count": 134,
+      "total_damage": 13400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "marill-halloween",
+      "move": "Thunderbolt",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "meowth",
+      "move": "Def by 1. Psychic",
+      "count": 18,
+      "total_damage": 1800.0
+    },
+    {
+      "player": "latios",
+      "opponent": "meowth",
+      "move": "Psychic",
+      "count": 16,
+      "total_damage": 1600.0
+    },
+    {
+      "player": "latios",
+      "opponent": "minun",
+      "move": "Def by 1. Psychic",
+      "count": 1,
+      "total_damage": 92.0
+    },
+    {
+      "player": "latios",
+      "opponent": "minun",
+      "move": "Psychic",
+      "count": 3,
+      "total_damage": 208.0
+    },
+    {
+      "player": "latios",
+      "opponent": "misdreavus",
+      "move": "Def by 1. Psycluc",
+      "count": 5,
+      "total_damage": 500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "misdreavus",
+      "move": "mt PsyCine",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "misdreavus",
+      "move": "mt Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "misdreavus",
+      "move": "Psychic",
+      "count": 9,
+      "total_damage": 900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "misdreavus-halloween",
+      "move": "Def by 1. PsyCine",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "misdreavus-halloween",
+      "move": "Def by 1. SYCrne",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "misdreavus-halloween",
+      "move": "Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "muk-alola",
+      "move": "Thunderbolt",
+      "count": 15,
+      "total_damage": 911.0
+    },
+    {
+      "player": "latios",
+      "opponent": "muk-alola-halloween",
+      "move": "Draco Meteor",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "muk-alola-halloween",
+      "move": "Viacy witlcur",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "murkrow",
+      "move": "HerUurracrre",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "murkrow",
+      "move": "Thunderbolt",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "nidorina",
+      "move": "Def by 1. Psychic",
+      "count": 165,
+      "total_damage": 16500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "nidorina",
+      "move": "Psychic",
+      "count": 539,
+      "total_damage": 53900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "nidorino",
+      "move": "Def by 1. Psychic",
+      "count": 185,
+      "total_damage": 18500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "nidorino",
+      "move": "Psychic",
+      "count": 482,
+      "total_damage": 48200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "noctowl",
+      "move": "Thunderbolt",
+      "count": 154,
+      "total_damage": 15400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "noctowl-halloween",
+      "move": "Thunderbolt",
+      "count": 12,
+      "total_damage": 1200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "palossand",
+      "move": "Surf",
+      "count": 530,
+      "total_damage": 53000.0
+    },
+    {
+      "player": "latios",
+      "opponent": "palossand-halloween",
+      "move": "Surf",
+      "count": 43,
+      "total_damage": 4300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "parasect",
+      "move": "Def by 1. Psycluc",
+      "count": 4,
+      "total_damage": 400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "parasect",
+      "move": "mt Psycluc",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "parasect",
+      "move": "Psychic",
+      "count": 7,
+      "total_damage": 700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pelipper",
+      "move": "HerUurracrre",
+      "count": 13,
+      "total_damage": 1300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pelipper",
+      "move": "Thunderbolt",
+      "count": 16,
+      "total_damage": 1600.0
+    },
+    {
+      "player": "latios",
+      "opponent": "persian-alola",
+      "move": "HerUurracrre",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "persian-alola",
+      "move": "Thunderbolt",
+      "count": 155,
+      "total_damage": 15500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "persian-alola-halloween",
+      "move": "Draco Meteor",
+      "count": 11,
+      "total_damage": 1100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "persian-alola-halloween",
+      "move": "viauy wictcur",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "phantump",
+      "move": "Def by 1. Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "phantump",
+      "move": "Def by 1. SYCrne",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "phantump",
+      "move": "mt Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "phantump",
+      "move": "Psychic",
+      "count": 17,
+      "total_damage": 1700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "phantump",
+      "move": "PsyCine",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "phantump-halloween",
+      "move": "Def by 1. Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "phantump-halloween",
+      "move": "Def by 1. SYCrne",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "phantump-halloween",
+      "move": "Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pidgeot",
+      "move": "HerUurracrre",
+      "count": 15,
+      "total_damage": 1500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pidgeot",
+      "move": "Thunderbolt",
+      "count": 524,
+      "total_damage": 52400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pidgeot-halloween",
+      "move": "Thunderbolt",
+      "count": 62,
+      "total_damage": 6200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "plusle",
+      "move": "Def by 1. Psychic",
+      "count": 6,
+      "total_damage": 600.0
+    },
+    {
+      "player": "latios",
+      "opponent": "plusle",
+      "move": "Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "poliwhirl",
+      "move": "Thunderbolt",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pumpkaboo",
+      "move": "Def by 1. Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pumpkaboo",
+      "move": "Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pumpkaboo-halloween",
+      "move": "Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pumpkaboo-large",
+      "move": "Def by 1. SYCrne",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pumpkaboo-large",
+      "move": "mt Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pumpkaboo-large",
+      "move": "Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pumpkaboo-small",
+      "move": "Def by 1. Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pumpkaboo-small",
+      "move": "Def by 1. SYCrne",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pumpkaboo-small",
+      "move": "Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pumpkaboo-super",
+      "move": "Def by 1. Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "pumpkaboo-super",
+      "move": "Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "raticate-alola",
+      "move": "HerUurracrre",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "raticate-alola",
+      "move": "Thunderbolt",
+      "count": 502,
+      "total_damage": 46518.0
+    },
+    {
+      "player": "latios",
+      "opponent": "raticate-alola-halloween",
+      "move": "Draco Meteor",
+      "count": 20,
+      "total_damage": 2000.0
+    },
+    {
+      "player": "latios",
+      "opponent": "raticate-alola-halloween",
+      "move": "Viacy witlcur",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "raticate-alola-halloween",
+      "move": "viauy wicicur",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "raticate-alola-halloween",
+      "move": "viauy wictcur",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "remoraid",
+      "move": "Thunderbolt",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ribombee",
+      "move": "Def by 1. Psycluc",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "ribombee",
+      "move": "Psychic",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "sandshrew",
+      "move": "Surf",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "scatterbug",
+      "move": "Psychic",
+      "count": 67,
+      "total_damage": 6700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "sewaddle",
+      "move": "Def by 1. Psycluc",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "shellder",
+      "move": "Thunderbolt",
+      "count": 13,
+      "total_damage": 1300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "shelmet",
+      "move": "Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "shiinotic",
+      "move": "Def by 1. Psycluc",
+      "count": 6,
+      "total_damage": 600.0
+    },
+    {
+      "player": "latios",
+      "opponent": "shiinotic",
+      "move": "mt Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "shiinotic",
+      "move": "Psychic",
+      "count": 9,
+      "total_damage": 894.0
+    },
+    {
+      "player": "latios",
+      "opponent": "shroomish",
+      "move": "Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "skiddo",
+      "move": "Psychic",
+      "count": 6,
+      "total_damage": 600.0
+    },
+    {
+      "player": "latios",
+      "opponent": "skitty",
+      "move": "Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "skuntank",
+      "move": "Draco Meteor",
+      "count": 6,
+      "total_damage": 600.0
+    },
+    {
+      "player": "latios",
+      "opponent": "skuntank",
+      "move": "viacy wietcul",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "skuntank",
+      "move": "viauy wicicur",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "spearow",
+      "move": "Thunderbolt",
+      "count": 14,
+      "total_damage": 1400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "tentacruel",
+      "move": "1 lt Psycluc",
+      "count": 4,
+      "total_damage": 400.0
+    },
+    {
+      "player": "latios",
+      "opponent": "tentacruel",
+      "move": "an Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "tentacruel",
+      "move": "Def by 1. Psychic",
+      "count": 73,
+      "total_damage": 7300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "tentacruel",
+      "move": "Def by 1. Psycluc",
+      "count": 8,
+      "total_damage": 800.0
+    },
+    {
+      "player": "latios",
+      "opponent": "tentacruel",
+      "move": "mt Psychic",
+      "count": 32,
+      "total_damage": 3200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "tentacruel",
+      "move": "Psychic",
+      "count": 240,
+      "total_damage": 24000.0
+    },
+    {
+      "player": "latios",
+      "opponent": "tentacruel",
+      "move": "Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "tentacruel-halloween",
+      "move": "Def by 1. Psychic",
+      "count": 9,
+      "total_damage": 900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "tentacruel-halloween",
+      "move": "mt Psychic",
+      "count": 5,
+      "total_damage": 500.0
+    },
+    {
+      "player": "latios",
+      "opponent": "tentacruel-halloween",
+      "move": "Psychic",
+      "count": 29,
+      "total_damage": 2900.0
+    },
+    {
+      "player": "latios",
+      "opponent": "trevenant",
+      "move": "1 lt Psychic.",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "trevenant",
+      "move": "Def by 1. Psychic",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "trevenant",
+      "move": "mt Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "trevenant",
+      "move": "Psychic",
+      "count": 7,
+      "total_damage": 700.0
+    },
+    {
+      "player": "latios",
+      "opponent": "turtonator",
+      "move": "Draco Meteor",
+      "count": 61,
+      "total_damage": 6100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "vulpix",
+      "move": "Surf",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "weepinbell",
+      "move": "Def by 1. Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "weepinbell",
+      "move": "Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "wimpod",
+      "move": "Thunderbolt",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "wooper",
+      "move": "Def by 1. Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "wooper",
+      "move": "Psychic",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "yamask",
+      "move": "Def by 1. Psychic",
+      "count": 2,
+      "total_damage": 200.0
+    },
+    {
+      "player": "latios",
+      "opponent": "yamask",
+      "move": "Def by 1. Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "yamask",
+      "move": "Def by 1. SYCrne",
+      "count": 3,
+      "total_damage": 300.0
+    },
+    {
+      "player": "latios",
+      "opponent": "yamask",
+      "move": "mt Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "yamask",
+      "move": "Psychic",
+      "count": 11,
+      "total_damage": 1100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "yamask",
+      "move": "PsyCine",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "yamask-halloween",
+      "move": "Def by 1. Psycluc",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "latios",
+      "opponent": "yanma",
+      "move": "Thunderbolt",
+      "count": 1,
+      "total_damage": 100.0
+    },
+    {
+      "player": "yveltal",
+      "opponent": "[e] palossand",
+      "move": "Dark Pulse",
+      "count": 2,
+      "total_damage": 59.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] arbok",
+      "move": "Heat Wave",
+      "count": 2,
+      "total_damage": 17.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] butterfree",
+      "move": "Heat Wave",
+      "count": 1,
+      "total_damage": 13.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] butterfree-halloween",
+      "move": "Heat Wave",
+      "count": 1,
+      "total_damage": 11.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] exploud",
+      "move": "Heat Wave",
+      "count": 3,
+      "total_damage": 31.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] fearow-halloween",
+      "move": "ce to burn the foe(s). Viocinarye",
+      "count": 1,
+      "total_damage": 15.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] fearow-halloween",
+      "move": "Discharge",
+      "count": 1,
+      "total_damage": 36.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] gengar",
+      "move": "10% cha Heat Wave",
+      "count": 1,
+      "total_damage": 14.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] gengar",
+      "move": "Heat Wave",
+      "count": 3,
+      "total_damage": 24.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] gyarados",
+      "move": "ce to burn the foe(s). Viocinarye",
+      "count": 3,
+      "total_damage": 58.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] gyarados",
+      "move": "Discharge",
+      "count": 1,
+      "total_damage": 22.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] haunter",
+      "move": "10% chat Heat Wave",
+      "count": 1,
+      "total_damage": 16.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] haunter",
+      "move": "Heat Wave",
+      "count": 1,
+      "total_damage": 11.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] liepard",
+      "move": "10% chat Heat Wave",
+      "count": 3,
+      "total_damage": 36.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] liepard",
+      "move": "Heat Wave",
+      "count": 9,
+      "total_damage": 126.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] liepard",
+      "move": "I oa Heat Wave",
+      "count": 2,
+      "total_damage": 32.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] liepard",
+      "move": "mA Heat Wave",
+      "count": 1,
+      "total_damage": 14.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] marill",
+      "move": "Discharge",
+      "count": 2,
+      "total_damage": 67.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] nidorina",
+      "move": "Heat Wave",
+      "count": 3,
+      "total_damage": 24.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] palossand",
+      "move": "Heat Wave",
+      "count": 5,
+      "total_damage": 53.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] persian-alola",
+      "move": "Heat Wave",
+      "count": 3,
+      "total_damage": 40.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] pidgeot",
+      "move": "Discharge",
+      "count": 1,
+      "total_damage": 19.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "[e] scatterbug",
+      "move": "Heat Wave",
+      "count": 1,
+      "total_damage": 19.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "haunter",
+      "move": "Heat Wave",
+      "count": 1,
+      "total_damage": 34.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "muk-alola",
+      "move": "Heat Wave",
+      "count": 1,
+      "total_damage": 25.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "raticate-alola",
+      "move": "10% chat Heat Wave",
+      "count": 1,
+      "total_damage": 5.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "raticate-alola",
+      "move": "Heat Wave",
+      "count": 9,
+      "total_damage": 41.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "raticate-alola",
+      "move": "I oa Heat Wave",
+      "count": 1,
+      "total_damage": 12.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "raticate-alola-halloween",
+      "move": "Heat Wave",
+      "count": 2,
+      "total_damage": 100.0
+    },
+    {
+      "player": "zapdos",
+      "opponent": "shedinja",
+      "move": "Heat Wave",
+      "count": 5,
+      "total_damage": 500.0
+    }
+  ]
+}

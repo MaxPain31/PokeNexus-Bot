@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 build/
 dist/
-screenshots/
+screenshot/
 
 Game Bot.spec
 dist.zip

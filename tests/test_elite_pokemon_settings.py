@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
+from types import MethodType, SimpleNamespace
 from unittest.mock import Mock
 
 from PySide6.QtWidgets import QApplication, QLabel
@@ -28,7 +28,9 @@ class ElitePokemonSettingsTests(unittest.TestCase):
             settings_window=settings,
             _normalise_wild_pokemon_name=OverlayWindow._normalise_wild_pokemon_name,
             _wild_pokemon_identity=OverlayWindow._wild_pokemon_identity,
+            _nature_matched_encounter_identity=None,
         )
+        overlay._encounter_nature_match = MethodType(OverlayWindow._encounter_nature_match, overlay)
 
         pokemon_input.text.return_value = ""
         self.assertTrue(

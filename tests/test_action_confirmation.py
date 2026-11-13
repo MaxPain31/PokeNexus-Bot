@@ -284,7 +284,481 @@ class _CatchingRecoveryTests:
         self.assertEqual(self.overlay._pending_battle_action.action_name, "Next Button")
 
 
-class ActionConfirmationTests(_CatchingRecoveryTests, _BattleActionTestCase):
+class _SpecialPokemonMessageTests:
+    _popup_message = (
+        "Special Encounter!\n"
+        "You have encountered a special pokemon!\n"
+        "Click the Close button to continue\n"
+        "Window will Auto-Close in: 02:54"
+    )
+
+    def _configure_special_message(self) -> None:
+        self.message_box = SavedRegion(
+            "special-pokemon-message", "Message Box", 220, 160, 300, 120,
+        )
+        self.close_button = SavedRegion(
+            "special-pokemon-message", "Close Button", 460, 250, 50, 25,
+        )
+        self.overlay.region_window.set_regions((*self.regions, self.message_box, self.close_button))
+
+    def _popup(self, kind=None, **changes):
+        return {
+            **self.menu, "showingSpecialPokemonMessage": True,
+            "specialPokemonMessage": (
+                f"You encountered a {kind} Pokemon!" if kind else self._popup_message
+            ),
+            **changes,
+        }
+
+    def _assert_special_inputs(self, *roles):
+        keys = {
+            "Fight Button": "1", "Move Slot 1": "1", "Bag Button": "2",
+            "Use Item Button": "3", "Pokemon Team Slot 2": "2", "Run Button": "4",
+        }
+        expected = [
+            ("click_region", role) if role == "Close Button" or self.use_mouse_clicking
+            else ("tap_key", keys[role])
+            for role in roles
+        ]
+        actual = [
+            (call[0], call.args[1].label if call[0] == "click_region" else chr(call.args[1]))
+            for call in self.overlay._auto_battle_input.method_calls
+        ]
+        self.assertEqual(actual, expected)
+
+    def test_all_special_popup_types_close_before_monitor_driven_fight_and_move(self) -> None:
+        self._configure_special_message()
+        regions = (
+            *self.overlay.region_window.regions,
+            SavedRegion("chat-box", "Battle Chat", 50, 200, 300, 100),
+            SavedRegion("turn", "Turn Button", 100, 100, 50, 20),
+        )
+        messages = (
+            ("Shiny", "You encountered a Shiny Pokemon!"),
+            ("Extremely Rare", "You encountered an Extremely Rare Pokemon!"),
+            ("Legendary", "You encountered a Legendary Pokemon!"),
+            ("Special Encounter", self._popup_message),
+        )
+        for index, (kind, message) in enumerate(messages):
+            with self.subTest(kind=kind):
+                self.overlay._reset_battle_actions()
+                self.overlay._auto_battle_input.reset_mock()
+                self.overlay.region_test_log_window.append_entry.reset_mock()
+                monitor = RealtimeRegionMonitor(
+                    regions, 42, self.overlay._target_geometry,
+                    image_capture=Mock(), text_extractor=Mock(), parent=self.overlay,
+                )
+                self.overlay._realtime_region_monitor = monitor
+                display = {"popup": kind, "main_menu": True}
+
+                def read_regions(screenshot, requested, timings):
+                    results = []
+                    for region in requested:
+                        if region == self.message_box:
+                            text = message if display["popup"] else ""
+                        elif display["popup"] and kind != "Special Encounter":
+                            text = ""
+                        elif region.feature == "chat-box":
+                            text = "A wild Pidgey appeared!"
+                        elif region.feature == "turn":
+                            text = "Turn 1"
+                        elif region.feature == "moves":
+                            text = "Tackle 1.0x 20/35" if not display["main_menu"] else "Fight"
+                        else:
+                            text = region.label if display["main_menu"] else ""
+                        results.append((region, OCRResult(text, 100, 30, 95.0)))
+                    return results
+
+                monitor._read_regions = Mock(side_effect=read_regions)
+
+                def capture(at):
+                    self.now = at
+                    state = monitor._capture_state({
+                        "capture_window": 0.0, "image_process": 0.0, "text_extraction": 0.0,
+                    })[0]
+                    self.overlay._on_realtime_state_updated(state)
+                    return state
+
+                start = 100.0 + index * 10.0
+                blocked = capture(start)
+                self.assertTrue(blocked["onBattleMode"])
+                self.assertIsNone(blocked["turn"])
+                self._assert_special_inputs("Close Button")
+                capture(start + 0.1)
+                self._assert_special_inputs("Close Button")
+                display["popup"] = None
+                capture(start + 0.2)
+                self._assert_special_inputs("Close Button")
+                capture(start + 0.3)
+                self._assert_special_inputs("Close Button", "Fight Button")
+                display["main_menu"] = False
+                capture(start + 0.4)
+                self._assert_special_inputs("Close Button", "Fight Button", "Move Slot 1")
+                self.assertIn(f"detected ({kind})", self._logs())
+                self.assertEqual(self._logs().count("dismissal confirmed"), 1)
+                self.assertEqual(
+                    self.overlay._auto_battle_input.click_region.call_args_list[0].args,
+                    (42, self.close_button, self.overlay._target_geometry),
+                )
+
+    def test_auto_close_off_interrupts_battle_and_waits_for_manual_or_timed_dismissal(self) -> None:
+        self._configure_special_message()
+        self.overlay.region_window.set_regions((*self.regions, self.message_box))
+        self.overlay.settings_window.auto_close_special_pokemon_message_toggle.setChecked(False)
+        self._state(self.menu, 100.0)
+        self._state(self._popup(), 100.1)
+        self.assertIsNone(self.overlay._pending_battle_action)
+        for at in (101.0, 105.0, 270.0):
+            self._state(self._popup(), at)
+        self._assert_special_inputs("Fight Button")
+        self.assertTrue(self.overlay._special_pokemon_message_controller.blocked)
+        self.assertIn("auto-close is off", self._logs())
+        self.assertNotIn("requires its Close Button region", self._logs())
+
+        self._state(self.menu, 280.0)
+        self._state(self.menu, 280.1, captured_at=280.0)
+        self._assert_special_inputs("Fight Button")
+        self._state(self.menu, 280.2)
+        self._assert_special_inputs("Fight Button", "Fight Button")
+        self.assertFalse(self.overlay._special_pokemon_message_controller.blocked)
+
+    def test_auto_close_takes_effect_live_without_reusing_stale_frames_or_clearing_the_pause(self) -> None:
+        self._configure_special_message()
+        toggle = self.overlay.settings_window.auto_close_special_pokemon_message_toggle
+        toggle.setChecked(False)
+        self._state(self._popup(), 100.0)
+        self._state(self._popup(), 101.0)
+        self._assert_special_inputs()
+        toggle.setChecked(True)
+        self._state(self._popup(), 101.1, captured_at=101.0)
+        self._assert_special_inputs()
+        self._state(self._popup(), 101.2)
+        self._assert_special_inputs("Close Button")
+
+        toggle.setChecked(False)
+        self._state(self._popup(), 103.3)
+        self._assert_special_inputs("Close Button")
+        self.assertTrue(self.overlay._special_pokemon_message_controller.blocked)
+        toggle.setChecked(True)
+        self._state(self._popup(), 103.4, captured_at=103.3)
+        self._assert_special_inputs("Close Button")
+        self._state(self._popup(), 103.5)
+        self._assert_special_inputs("Close Button", "Close Button")
+
+        toggle.setChecked(False)
+        self._state(self.menu, 103.6)
+        self._assert_special_inputs("Close Button", "Close Button")
+        self._state(self.menu, 103.7)
+        self._assert_special_inputs("Close Button", "Close Button", "Fight Button")
+
+    def test_failed_close_is_paced_and_stale_duplicate_or_unknown_frames_cannot_resume(self) -> None:
+        self._configure_special_message()
+        popup = self._popup()
+        self.overlay._auto_battle_input.click_region.side_effect = RuntimeError("Game is covered")
+        self._state(popup, 100.0)
+        self._state(popup, 101.99)
+        self._assert_special_inputs("Close Button")
+        self._state(popup, 102.0)
+        self._state(self.menu, 102.3, captured_at=101.8)
+        self._state(popup, 102.4)
+        self._assert_special_inputs("Close Button", "Close Button")
+        self.assertEqual(self._logs().count("could not click Close Button"), 1)
+
+        self.overlay._auto_battle_input.click_region.side_effect = None
+        self._state(popup, 104.0)
+        self._state(self.menu, 104.1, captured_at=103.9)
+        self._state(self.menu, 104.2)
+        self._state(self.menu, 104.3, captured_at=104.2)
+        self._state({**self.menu, "showingSpecialPokemonMessage": None}, 104.4)
+        self._state(self.menu, 104.5)
+        self._assert_special_inputs("Close Button", "Close Button", "Close Button")
+        self.assertNotIn("dismissal confirmed", self._logs())
+        self._state(self.menu, 104.6)
+        self._assert_special_inputs("Close Button", "Close Button", "Close Button", "Fight Button")
+
+    def test_missing_close_target_blocks_battle_until_it_is_configured(self) -> None:
+        self._configure_special_message()
+        self.overlay.region_window.set_regions((*self.regions, self.message_box))
+        self._state(self._popup(), 100.0)
+        self._state(self._popup(), 102.1)
+        self._assert_special_inputs()
+        self.assertEqual(self._logs().count("requires its Close Button region"), 1)
+        self.assertIsNone(self.overlay._pending_battle_action)
+        self.overlay.region_window.set_regions((*self.regions, self.message_box, self.close_button))
+        self._state(self._popup(), 104.2)
+        self._state(self.menu, 104.4)
+        self._assert_special_inputs("Close Button")
+        self._state(self.menu, 104.6)
+        self._assert_special_inputs("Close Button", "Fight Button")
+
+    def test_popup_preempts_a_pending_move_without_confirming_it_or_recording_damage(self) -> None:
+        self._configure_special_message()
+        self._state(self.moves, 100.0)
+        self.assertIsNotNone(self.overlay._pending_battle_move)
+        self._state(self._popup(enemyPokemonHealth=40), 100.1)
+        self._assert_special_inputs("Move Slot 1", "Close Button")
+        self.assertIsNone(self.overlay._pending_battle_action)
+        self.assertIsNone(self.overlay._pending_battle_move)
+        self.assertFalse(self.overlay._auto_battle_move_clicked)
+        self.assertNotIn("confirmed Move Slot", self._logs())
+        self._state(self.menu, 100.2)
+        self._state(self.menu, 100.3)
+        self._assert_special_inputs("Move Slot 1", "Close Button", "Fight Button")
+
+    def test_popup_restarts_interrupted_catching_from_the_visible_bag(self) -> None:
+        self._configure_special_message()
+        self._enable_catching()
+        self._state(self.menu, 100.0)
+        self._state(self._popup(), 100.1)
+        self.assertEqual(self.overlay._auto_catch_phase, "ready")
+        self.assertIsNone(self.overlay._pending_battle_action)
+        bag = {**self.submenu, "bagItemName": "Ultra Ball"}
+        self._state(bag, 100.2)
+        self._assert_special_inputs("Bag Button", "Close Button")
+        self._state(bag, 100.3)
+        self._assert_special_inputs("Bag Button", "Close Button", "Use Item Button")
+        self.assertEqual(self.overlay._auto_catch_phase, "using_item")
+
+    def test_popup_interruption_preserves_the_replacement_slot_and_two_second_delay(self) -> None:
+        self._configure_special_message()
+        self.overlay.settings_window.auto_battle_toggle.setChecked(False)
+        self.overlay.settings_window.auto_switch_fainted_pokemon_toggle.setChecked(True)
+        fainted = {**self.submenu, "yourPokemonHealth": 0}
+        self._state(fainted, 100.0)
+        self._state(fainted, 102.0)
+        self._state(self._popup(yourPokemonHealth=0), 102.1)
+        self._state(fainted, 102.2)
+        self._state(fainted, 102.3)
+        self._state(fainted, 104.29)
+        self._assert_special_inputs("Pokemon Team Slot 2", "Close Button")
+        self.assertEqual(self.overlay._auto_switch_controller._next_slot, 2)
+        self._state(fainted, 104.3)
+        self._assert_special_inputs("Pokemon Team Slot 2", "Close Button", "Pokemon Team Slot 2")
+        self._state({**self.submenu, "turn": 2, "yourPokemonHealth": 80}, 104.5)
+        self.assertEqual(self.overlay._auto_switch_controller._next_slot, 3)
+
+    def test_queued_run_and_walking_wait_until_popup_dismissal_is_confirmed(self) -> None:
+        self._configure_special_message()
+        self.overlay.settings_window.auto_battle_toggle.setChecked(False)
+        self.overlay.settings_window.auto_run_toggle.setChecked(True)
+        self.overlay._auto_walk_controller.stop = Mock()
+        self._state(self.menu, 100.0)
+        self.assertTrue(self.overlay._auto_run_timer.isActive())
+        self._state(self._popup(), 100.1)
+        self.assertFalse(self.overlay._auto_run_timer.isActive())
+        self.overlay._auto_walk_controller.stop.assert_called()
+        self.overlay._click_auto_run()
+        self._state(self.menu, 100.2)
+        self.overlay._click_auto_run()
+        self._assert_special_inputs("Close Button")
+        self._state(self.menu, 100.3)
+        self.overlay._auto_run_timer.stop()
+        self.overlay._click_auto_run()
+        self._assert_special_inputs("Close Button", "Run Button")
+
+    def test_closing_a_shiny_popup_still_honors_stop_for_shiny_in_battle_and_run(self) -> None:
+        self._configure_special_message()
+        self.overlay.settings_window.stop_for_shiny_toggle.setChecked(True)
+        for index, auto_run in enumerate((False, True)):
+            with self.subTest(auto_run=auto_run):
+                self.overlay._reset_battle_actions()
+                self.overlay._auto_battle_input.reset_mock()
+                self.overlay.settings_window.auto_run_toggle.setChecked(auto_run)
+                start = 100.0 + index * 10.0
+                self._state(self._popup(wildPokemonIsShiny=True), start)
+                shiny = {**self.menu, "wildPokemonIsShiny": True}
+                self._state(shiny, start + 0.1)
+                self._state(shiny, start + 0.2)
+                self._assert_special_inputs("Close Button")
+                self.assertIsNone(self.overlay._pending_battle_action)
+                self.assertIn("stopped for this encounter", self._logs())
+
+    def test_shiny_catching_uses_existing_filters_only_after_popup_confirmation(self) -> None:
+        self._configure_special_message()
+        settings = self.overlay.settings_window
+        settings.stop_for_shiny_toggle.setChecked(True)
+        settings.stop_for_desired_pokemon_toggle.setChecked(True)
+        settings.desired_pokemon_input.setText("Eevee")
+        settings.auto_catching_toggle.setChecked(True)
+        settings.auto_catching_desired_toggle.setChecked(True)
+        settings.auto_catching_shiny_toggle.setChecked(False)
+        settings.auto_catching_elite_toggle.setChecked(False)
+        settings.auto_catching_item_selection.setCurrentText("Ultra Ball")
+        settings.auto_run_toggle.setChecked(True)
+        self._state(self._popup(wildPokemonIsShiny=True), 100.0)
+        shiny = {**self.menu, "wildPokemonIsShiny": True}
+        self._state(shiny, 100.1)
+        self._state(shiny, 100.2)
+        self._assert_special_inputs("Close Button")
+        self.assertIsNone(self.overlay._pending_battle_action)
+
+        settings.auto_catching_shiny_toggle.setChecked(True)
+        self._state(shiny, 100.3)
+        self._assert_special_inputs("Close Button", "Bag Button")
+        self._state({
+            **self.submenu, "wildPokemonIsShiny": True,
+            "clickedBagButton": True, "bagItemName": "Ultra Ball",
+        }, 100.4)
+        self._assert_special_inputs("Close Button", "Bag Button", "Use Item Button")
+
+    def test_stop_and_monitor_restart_discard_queued_popup_closes(self) -> None:
+        self._configure_special_message()
+        regions = tuple(self.overlay.region_window.regions)
+        monitor = RealtimeRegionMonitor(
+            regions, 42, self.overlay._target_geometry,
+            image_capture=Mock(), text_extractor=Mock(), parent=self.overlay,
+        )
+        monitor.state_updated.connect(self.overlay._on_realtime_state_updated)
+        self.overlay._realtime_region_monitor = monitor
+        self._state(self._popup(), 100.0)
+        self.overlay.stop_realtime_region_capture()
+        self.assertFalse(self.overlay._special_pokemon_message_controller.blocked)
+        self.now = 103.0
+        monitor.state_updated.emit({**self._popup(), "captureStartedAt": self.now})
+        self._assert_special_inputs("Close Button")
+        self.overlay._on_realtime_monitor_finished(monitor)
+        self.overlay._realtime_capture_requested = True
+        monitor.state_updated.emit({**self._popup(), "captureStartedAt": self.now})
+        self._assert_special_inputs("Close Button")
+        self._state(self._popup(), 103.2)
+        self._assert_special_inputs("Close Button", "Close Button")
+        self.assertEqual(tuple(self.overlay.region_window.regions), regions)
+
+    def test_battle_automations_start_after_old_catch_chat_and_noisy_popup_background(self) -> None:
+        self._configure_special_message()
+        regions = (
+            *self.overlay.region_window.regions,
+            SavedRegion("chat-box", "Battle Chat", 50, 100, 300, 150),
+            SavedRegion("turn", "Turn Button", 600, 100, 100, 30),
+            SavedRegion("health", "Ally Health", 600, 350, 60, 20),
+            SavedRegion("health", "Enemy Health", 600, 150, 60, 20),
+        )
+        settings = self.overlay.settings_window
+        for index, (automation, role, key) in enumerate((
+            ("battle", "Fight Button", "1"), ("run", "Run Button", "4"),
+            ("catch", "Bag Button", "2"), ("switch", "Pokemon Team Slot 2", "2"),
+        )):
+            with self.subTest(automation=automation):
+                self.overlay._reset_battle_actions()
+                self.overlay._auto_battle_input.reset_mock()
+                settings.auto_run_toggle.setChecked(False)
+                settings.auto_battle_toggle.setChecked(automation == "battle")
+                settings.auto_switch_fainted_pokemon_toggle.setChecked(automation == "switch")
+                settings.auto_catching_toggle.setChecked(automation == "catch")
+                settings.auto_run_toggle.setChecked(automation == "run")
+                settings.stop_for_desired_pokemon_toggle.setChecked(automation == "catch")
+                settings.desired_pokemon_input.setText("Pidgey")
+                monitor = RealtimeRegionMonitor(
+                    regions, 42, self.overlay._target_geometry,
+                    image_capture=Mock(), text_extractor=Mock(), parent=self.overlay,
+                )
+                self.overlay._realtime_region_monitor = monitor
+
+                def read_regions(screenshot, requested, timings):
+                    results = []
+                    for region in requested:
+                        confidence = 95.0
+                        if region.label == "Message Box":
+                            text, confidence = "fh . a sew BH OU furs |__|", 32.41
+                        elif region.feature == "chat-box":
+                            text = (
+                                "Congratulations, you caught the opposing Ekans.\n"
+                                "A wild Pidgey appeared!\nGo! Pikachu!\nTurn 1"
+                            )
+                        elif region.feature == "turn":
+                            text = "Turn 1"
+                        elif region.feature == "health":
+                            text = "0%" if automation == "switch" and region.label == "Ally Health" else "100%"
+                        elif region.label in ("Fight Button", "Bag Button", "Pokemon/Swap Button", "Run Button"):
+                            text = region.label if automation != "switch" else ""
+                        else:
+                            text = ""
+                        results.append((region, OCRResult(text, 100, 30, confidence)))
+                    return results
+
+                monitor._read_regions = Mock(side_effect=read_regions)
+
+                def capture(at):
+                    self.now = at
+                    state = monitor._capture_state({
+                        "capture_window": 0.0, "image_process": 0.0, "text_extraction": 0.0,
+                    })[0]
+                    self.assertIs(state["onBattleMode"], True)
+                    self.assertIs(state["showingSpecialPokemonMessage"], False)
+                    self.overlay._on_realtime_state_updated(state)
+
+                start = 100.0 + index * 10.0
+                capture(start)
+                if automation == "switch":
+                    capture(start + 1.99)
+                    self.overlay._auto_battle_input.tap_key.assert_not_called()
+                    self.overlay._auto_battle_input.click_region.assert_not_called()
+                    capture(start + 2.0)
+                elif automation == "run":
+                    self.overlay._auto_run_timer.stop()
+                    self.overlay._click_auto_run()
+                if self.use_mouse_clicking:
+                    self.assertEqual(self._clicks(), [role])
+                    self.overlay._auto_battle_input.tap_key.assert_not_called()
+                else:
+                    self.assertEqual(self._keys(), [key])
+                    self.overlay._auto_battle_input.click_region.assert_not_called()
+
+    def test_unreadable_turn_and_menu_explain_the_wait_then_start_from_a_fresh_menu(self) -> None:
+        for at in (100.0, 101.0):
+            self._state({**self.menu, "turn": None}, at)
+        self.assertEqual(self._logs().count("a readable turn number in the Turn Button region"), 1)
+        for at in (102.0, 103.0):
+            self._state({**self.menu, "showingRunButton": None}, at)
+        self.assertEqual(self._logs().count("Run=None"), 1)
+        self._state({**self.menu, "clickStateReliable": False}, 104.0)
+        self.assertIn("readable region OCR before sending an action", self._logs())
+        self.overlay._auto_battle_input.tap_key.assert_not_called()
+        self.overlay._auto_battle_input.click_region.assert_not_called()
+
+        self._state(self.menu, 105.0)
+        if self.use_mouse_clicking:
+            self.assertEqual(self._clicks(), ["Fight Button"])
+        else:
+            self.assertEqual(self._keys(), ["1"])
+
+
+class _BattleLatencyTests:
+    def _assert_fast_battle_inputs(self, *roles: str) -> None:
+        if self.use_mouse_clicking:
+            self.assertEqual(self._clicks(), list(roles))
+            self.overlay._auto_battle_input.tap_key.assert_not_called()
+        else:
+            self.assertEqual(self._keys(), ["1" for _role in roles])
+            self.overlay._auto_battle_input.click_region.assert_not_called()
+
+    def test_confirmed_fight_selects_a_move_immediately_without_waiting_for_retry_delay(self) -> None:
+        self._state(self.menu, 100.0)
+        self._state(self.moves, 100.005, captured_at=99.99)
+        self._assert_fast_battle_inputs("Fight Button")
+
+        self._state(self.moves, 100.01)
+
+        self._assert_fast_battle_inputs("Fight Button", "Move Slot 1")
+        self.assertIn("confirmed Fight Button", self._logs())
+        self.assertEqual(self.overlay._pending_battle_action.feature, "moves")
+        self.assertFalse(self.overlay._auto_battle_move_clicked)
+
+    def test_fast_fight_confirmation_still_waits_for_all_four_move_and_pp_readings(self) -> None:
+        self._state(self.menu, 100.0)
+        partial = {
+            **self.moves, "pokemonMoves": "Move Slot 1: Tackle (1.0x | 20/35)",
+        }
+        self._state(partial, 100.01)
+
+        self._assert_fast_battle_inputs("Fight Button")
+        self.assertIsNone(self.overlay._pending_battle_action)
+        self.assertIn("all four move slots", self._logs())
+        self._state(self.moves, 100.02)
+        self._assert_fast_battle_inputs("Fight Button", "Move Slot 1")
+
+
+class ActionConfirmationTests(_BattleLatencyTests, _SpecialPokemonMessageTests, _CatchingRecoveryTests, _BattleActionTestCase):
     use_mouse_clicking = True
 
     def test_ignored_fight_retries_then_advances_only_after_the_move_menu_appears(self) -> None:
@@ -454,6 +928,7 @@ class ActionConfirmationTests(_CatchingRecoveryTests, _BattleActionTestCase):
         self.assertIn("opposing Pokemon was caught", self._logs())
 
     def test_run_waits_for_confirmed_battle_end_and_retries_an_ignored_click(self) -> None:
+        self.overlay.settings_window.auto_battle_toggle.setChecked(False)
         self.overlay.settings_window.auto_run_toggle.setChecked(True)
         self._state(self.menu, 100.0)
         self.overlay._auto_run_timer.stop()
@@ -491,7 +966,7 @@ class ActionConfirmationTests(_CatchingRecoveryTests, _BattleActionTestCase):
         self.assertIn("confirmed Pokemon Team Slot 2", self._logs())
 
 
-class KeyboardActionConfirmationTests(_CatchingRecoveryTests, _BattleActionTestCase):
+class KeyboardActionConfirmationTests(_BattleLatencyTests, _SpecialPokemonMessageTests, _CatchingRecoveryTests, _BattleActionTestCase):
     def _keys(self):
         return [
             chr(call.args[1])
@@ -679,6 +1154,7 @@ class KeyboardActionConfirmationTests(_CatchingRecoveryTests, _BattleActionTestC
         self.overlay._auto_battle_input.click_region.assert_not_called()
 
     def test_run_uses_four_and_requires_a_confirmed_response(self) -> None:
+        self.overlay.settings_window.auto_battle_toggle.setChecked(False)
         self.overlay.settings_window.auto_run_toggle.setChecked(True)
         self._state(self.menu, 100.0)
         self.overlay._auto_run_timer.stop()

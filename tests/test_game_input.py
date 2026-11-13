@@ -270,6 +270,7 @@ class GameKeyboardInputTests(unittest.TestCase):
     def setUp(self) -> None:
         self.input = GameInput()
         self.events = []
+        self.scan_codes = []
         self.send_results = []
         self.user32 = Mock()
         self.user32.SendInput.side_effect = self._send_input
@@ -291,15 +292,41 @@ class GameKeyboardInputTests(unittest.TestCase):
         self.assertEqual(size, ctypes.sizeof(_Input))
         self.assertEqual(event.type, GameInput._INPUT_KEYBOARD)
         self.events.append((event.value.ki.wVk, event.value.ki.dwFlags))
+        self.scan_codes.append(event.value.ki.wScan)
         return self.send_results.pop(0) if self.send_results else 1
+
+    def test_arrow_keys_send_physical_scan_codes_with_extended_press_and_release(self) -> None:
+        for virtual_key, scan_code in ((0x25, 0x4B), (0x26, 0x48), (0x27, 0x4D), (0x28, 0x50)):
+            with self.subTest(key=virtual_key):
+                self.events.clear()
+                self.scan_codes.clear()
+                self.input.press_key(42, virtual_key)
+                self.foreground.return_value = False
+                self.input.release_key(virtual_key)
+                self.foreground.return_value = True
+                self.assertEqual(self.events, [(0, 0x0009), (0, 0x000B)])
+                self.assertEqual(self.scan_codes, [scan_code, scan_code])
 
     def test_repeated_number_one_taps_have_separate_non_extended_down_and_up_events(self) -> None:
         for _ in range(2):
             self.input.tap_key(42, ord("1"), duration_seconds=0.05, extended=False)
-        self.assertEqual(self.events, [(0x31, 0), (0x31, 2), (0x31, 0), (0x31, 2)])
+        self.assertEqual(self.events, [(0, 8), (0, 10), (0, 8), (0, 10)])
+        self.assertEqual(self.scan_codes, [0x02] * 4)
         self.assertEqual(self.sleep.call_args_list, [call(0.05), call(0.05)])
         self.assertEqual(self.foreground.call_args_list, [call(42), call(42)])
         self.user32.SetPhysicalCursorPos.assert_not_called()
+
+    def test_battle_and_fishing_controls_send_non_extended_physical_keys(self) -> None:
+        for key, scan_code in (
+            ("1", 0x02), ("2", 0x03), ("3", 0x04), ("4", 0x05),
+            ("5", 0x06), ("6", 0x07), ("F", 0x21), (" ", 0x39),
+        ):
+            with self.subTest(key=key):
+                self.events.clear()
+                self.scan_codes.clear()
+                self.input.tap_key(42, ord(key), extended=False)
+                self.assertEqual(self.events, [(0, 8), (0, 10)])
+                self.assertEqual(self.scan_codes, [scan_code, scan_code])
 
     def test_background_game_is_not_sent_a_key_or_activated(self) -> None:
         self.foreground.return_value = False
@@ -315,33 +342,38 @@ class GameKeyboardInputTests(unittest.TestCase):
 
         self.sleep.side_effect = lose_focus
         self.input.tap_key(42, ord("3"), extended=False)
-        self.assertEqual(self.events, [(0x33, 0), (0x33, 2)])
+        self.assertEqual(self.events, [(0, 8), (0, 10)])
+        self.assertEqual(self.scan_codes, [0x04, 0x04])
         self.foreground.assert_called_once_with(42)
 
     def test_interrupted_hold_still_releases_the_number_key(self) -> None:
         self.sleep.side_effect = RuntimeError("interrupted")
         with self.assertRaisesRegex(RuntimeError, "interrupted"):
             self.input.tap_key(42, ord("4"), extended=False)
-        self.assertEqual(self.events, [(0x34, 0), (0x34, 2)])
+        self.assertEqual(self.events, [(0, 8), (0, 10)])
+        self.assertEqual(self.scan_codes, [0x05, 0x05])
 
     def test_rejected_key_down_does_not_release_a_key_that_was_never_pressed(self) -> None:
         self.send_results = [0]
         with self.assertRaises(OSError):
             self.input.tap_key(42, ord("5"), extended=False)
-        self.assertEqual(self.events, [(0x35, 0)])
+        self.assertEqual(self.events, [(0, 8)])
+        self.assertEqual(self.scan_codes, [0x06])
         self.sleep.assert_not_called()
 
     def test_key_release_is_retried_and_a_permanent_failure_is_reported(self) -> None:
         for released in (True, False):
             with self.subTest(released=released):
                 self.events.clear()
+                self.scan_codes.clear()
                 self.send_results = [1, 0, int(released)]
                 if released:
                     self.input.tap_key(42, ord("6"), extended=False)
                 else:
                     with self.assertRaises(OSError):
                         self.input.tap_key(42, ord("6"), extended=False)
-                self.assertEqual(self.events, [(0x36, 0), (0x36, 2), (0x36, 2)])
+                self.assertEqual(self.events, [(0, 8), (0, 10), (0, 10)])
+                self.assertEqual(self.scan_codes, [0x07] * 3)
 
 
 if __name__ == "__main__":

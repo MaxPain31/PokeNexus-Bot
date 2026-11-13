@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from PySide6.QtCore import QRect
 
 from capture.realtime_region_monitor import RealtimeRegionMonitor
+from core.auto_battle import choose_move_slot, has_complete_move_set
 from models.ocr_result import OCRResult
 from models.region_config import SavedRegion
 from overlay.overlay_window import OverlayWindow
@@ -69,6 +70,102 @@ class RealtimeClickTrackingTests(unittest.TestCase):
         return self.monitor._capture_state({
             "capture_window": 0.0, "image_process": 0.0, "text_extraction": 0.0,
         })[0]
+
+    def _requested_regions(self):
+        return [
+            region
+            for call in self.monitor._read_regions.call_args_list
+            for region in call.args[1]
+        ]
+
+    def test_main_menu_skips_item_navigation_item_name_and_move_ocr(self) -> None:
+        self.bag_item = "Ultra Ball"
+        state = self._capture()
+
+        requested = self._requested_regions()
+        self.assertTrue(all(state[name] for name in self.monitor._BUTTON_FEATURES))
+        self.assertTrue(all(region in requested for region in self.actions.values()))
+        self.assertFalse(any(
+            region.feature == "moves"
+            or region.label in ("Previous Button", "Next Button", "Item Name", "Use Item Button")
+            for region in requested
+        ))
+        self.assertIsNone(state["bagItemName"])
+
+    def test_first_fresh_fight_response_reads_all_four_moves_together_without_item_name(self) -> None:
+        self.monitor._regions_by_feature["moves"].extend(
+            SavedRegion("moves", f"Move Slot {slot}", 100 + slot * 60, 300, 100, 30)
+            for slot in range(2, 5)
+        )
+
+        def read_moves(screenshot, regions, timings):
+            return [
+                (region, OCRResult(
+                    "Discharge 4x 24/24" if region.label == "Move Slot 2" else result.text,
+                    100, 30, 95.0,
+                ))
+                for region, result in self._read_regions(screenshot, regions, timings)
+            ]
+
+        self.monitor._read_regions.side_effect = read_moves
+        self.monitor.record_automated_action("fight", "Fight Button")
+        self._capture()
+        self.monitor._read_regions.reset_mock()
+        self.main_menu = False
+        state = self._capture()
+
+        self.assertTrue(state["clickedFightButton"])
+        self.assertTrue(has_complete_move_set(state["pokemonMoves"]))
+        self.assertEqual(choose_move_slot(state["pokemonMoves"]), 2)
+        move_batches = [
+            [region.label for region in call.args[1] if region.feature == "moves"]
+            for call in self.monitor._read_regions.call_args_list
+            if any(region.feature == "moves" for region in call.args[1])
+        ]
+        self.assertEqual(move_batches, [[f"Move Slot {slot}" for slot in range(1, 5)]])
+        self.assertFalse(any(
+            region.label in ("Previous Button", "Next Button", "Item Name")
+            for region in self._requested_regions()
+        ))
+
+    def test_bag_navigation_targets_are_never_recognized_to_detect_the_item_menu(self) -> None:
+        self.monitor._regions_by_feature["bag"].append(
+            SavedRegion("bag", "Previous Button", 240, 300, 50, 30)
+        )
+        self.main_menu = False
+        self.bag_item = "Ultra Ball"
+        self.bag_controls = True
+        state = self._capture()
+
+        self.assertTrue(state["showingBagItemMenu"])
+        self.assertEqual(state["bagItemName"], "Ultra Ball")
+        self.assertFalse(any(
+            region.label in ("Previous Button", "Next Button")
+            for region in self._requested_regions()
+        ))
+
+    def test_fresh_use_item_controls_override_old_fight_tracking(self) -> None:
+        self.main_menu = False
+        self.monitor.record_automated_action("fight", "Fight Button")
+        self.assertTrue(self._capture()["clickedFightButton"])
+        self.bag_item = "Ultra Ball"
+        self.bag_controls = True
+        state = self._capture()
+
+        self.assertTrue(state["showingBagItemMenu"])
+        self.assertEqual(state["bagItemName"], "Ultra Ball")
+        self.assertIsNone(state["pokemonMoves"])
+
+    def test_confirmed_bag_does_not_depend_on_move_ocr_during_menu_recovery(self) -> None:
+        self.monitor._recovering_battle_menu = True
+        self.main_menu = False
+        self.bag_item = "Ultra Ball"
+        self.bag_controls = True
+        state = self._capture()
+
+        self.assertTrue(state["showingBagItemMenu"])
+        self.assertTrue(state["clickStateReliable"])
+        self.assertFalse(any(region.feature == "moves" for region in self._requested_regions()))
 
     def test_submitted_fight_click_enables_move_ocr_without_a_mouse_hook(self) -> None:
         self.main_menu = False
@@ -345,6 +442,7 @@ class RealtimeClickTrackingTests(unittest.TestCase):
         overlay = SimpleNamespace(
             _target_window_id=42, _target_geometry=QRect(0, 0, 800, 600),
             _auto_battle_input=Mock(), _auto_battle_log_once=Mock(),
+            _ev_training_enabled=Mock(return_value=False),
             _realtime_region_monitor=self.monitor, region_test_log_window=Mock(),
             settings_window=SimpleNamespace(
                 use_mouse_clicking_toggle=Mock(isChecked=Mock(return_value=True)),
@@ -375,6 +473,7 @@ class RealtimeClickTrackingTests(unittest.TestCase):
         overlay = SimpleNamespace(
             _target_window_id=42,
             _auto_battle_input=Mock(), _auto_battle_log_once=Mock(),
+            _ev_training_enabled=Mock(return_value=False),
             _realtime_region_monitor=self.monitor, region_test_log_window=Mock(),
             settings_window=SimpleNamespace(
                 use_mouse_clicking_toggle=Mock(isChecked=Mock(return_value=False)),

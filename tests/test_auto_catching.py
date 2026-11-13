@@ -34,10 +34,17 @@ class AutoCatchingTests(unittest.TestCase):
             sender=lambda: None,
             _latest_realtime_state={},
             _last_input_completed_at=0.0,
+            _cancel_queued_auto_run=Mock(),
+            _handle_special_pokemon_message=Mock(return_value=False),
+            _update_ev_training_progress=Mock(),
+            _update_encounter_nature_match=Mock(),
+            _awaiting_target_nature_match=Mock(return_value=False),
             _update_pending_battle_action=Mock(return_value=False),
             _update_fishing_battle_state=Mock(),
+            region_window=Mock(),
             _update_battle_move_history=Mock(),
-            _auto_walk_controller=SimpleNamespace(update=Mock()),
+            _sync_auto_walk=Mock(),
+            _log_battle_wait=Mock(),
             settings_window=settings,
             _realtime_capture_requested=True,
             _is_player_faint_confirmed=Mock(return_value=False),
@@ -116,7 +123,7 @@ class AutoCatchingTests(unittest.TestCase):
         self.assertTrue(handled)
         self.assertEqual(controller.update.call_args.kwargs["health"], 0)
 
-    def test_auto_battle_and_auto_run_are_exclusive_but_catching_can_combine(
+    def test_auto_battle_run_switch_and_catching_can_combine(
         self,
     ) -> None:
         settings = SettingsWindow()
@@ -125,11 +132,11 @@ class AutoCatchingTests(unittest.TestCase):
         settings.auto_catching_toggle.setChecked(True)
 
         self.assertTrue(settings.auto_battle_toggle.isEnabled())
-        self.assertFalse(settings.auto_battle_toggle.isChecked())
+        self.assertTrue(settings.auto_battle_toggle.isChecked())
         self.assertTrue(settings.auto_switch_fainted_pokemon_toggle.isEnabled())
         self.assertTrue(settings.auto_switch_fainted_pokemon_toggle.isChecked())
         self.assertTrue(settings.auto_run_toggle.isEnabled())
-        self.assertFalse(settings.auto_run_toggle.isChecked())
+        self.assertTrue(settings.auto_run_toggle.isChecked())
         self.assertTrue(settings.auto_catching_toggle.isEnabled())
         self.assertTrue(settings.auto_catching_configuration.isHidden() is False)
         self.assertIsInstance(settings.auto_catching_configuration, QFrame)
@@ -145,14 +152,14 @@ class AutoCatchingTests(unittest.TestCase):
 
         settings.auto_battle_toggle.setChecked(True)
         self.assertTrue(settings.auto_battle_toggle.isChecked())
-        self.assertFalse(settings.auto_run_toggle.isChecked())
+        self.assertTrue(settings.auto_run_toggle.isChecked())
         settings.auto_run_toggle.setChecked(True)
-        self.assertFalse(settings.auto_battle_toggle.isChecked())
-        self.assertFalse(settings.auto_switch_fainted_pokemon_toggle.isChecked())
+        self.assertTrue(settings.auto_battle_toggle.isChecked())
+        self.assertTrue(settings.auto_switch_fainted_pokemon_toggle.isChecked())
         self.assertTrue(settings.auto_run_toggle.isChecked())
         self.assertTrue(settings.auto_catching_toggle.isChecked())
         settings.auto_switch_fainted_pokemon_toggle.setChecked(True)
-        self.assertFalse(settings.auto_run_toggle.isChecked())
+        self.assertTrue(settings.auto_run_toggle.isChecked())
         self.assertTrue(settings.auto_switch_fainted_pokemon_toggle.isChecked())
 
         settings.stop_for_desired_pokemon_toggle.setChecked(True)
@@ -180,7 +187,7 @@ class AutoCatchingTests(unittest.TestCase):
         self.assertTrue(settings.auto_catching_configuration.isHidden())
         settings.close()
 
-    def test_settings_height_is_fixed_and_only_active_long_tab_scrolls(self) -> None:
+    def test_settings_height_is_fixed_and_scrolling_follows_the_active_tab(self) -> None:
         settings = SettingsWindow()
         settings.auto_catching_toggle.setChecked(True)
         settings.show_at(
@@ -193,6 +200,9 @@ class AutoCatchingTests(unittest.TestCase):
         self.assertEqual(settings.minimumHeight(), fixed_height)
         self.assertEqual(settings.maximumHeight(), fixed_height)
         self.assertLessEqual(fixed_height, 600 - 16)
+        battle_scroll_maximum = settings.content_scroll_area.verticalScrollBar().maximum()
+        settings.settings_tabs._buttons[4].click()
+        self.application.processEvents()
         self.assertEqual(settings.content_scroll_area.verticalScrollBar().maximum(), 0)
 
         settings.settings_tabs._buttons[1].click()
@@ -206,7 +216,9 @@ class AutoCatchingTests(unittest.TestCase):
         QTest.qWait(220)
         self.application.processEvents()
         self.assertEqual(settings.height(), fixed_height)
-        self.assertEqual(settings.content_scroll_area.verticalScrollBar().maximum(), 0)
+        self.assertEqual(
+            settings.content_scroll_area.verticalScrollBar().maximum(), battle_scroll_maximum,
+        )
         settings.close()
 
     def test_settings_height_is_capped_on_tall_game_windows(self) -> None:
@@ -363,6 +375,21 @@ class AutoCatchingTests(unittest.TestCase):
             )
         )
 
+    def test_old_catch_chat_does_not_suppress_the_next_battle_or_confirm_its_catch(self) -> None:
+        caught = "Congratulations, you caught the opposing Ekans."
+        for announcement in (
+            "A wild Pidgey appeared!", "A Wild Ekans\nappeared!", "AWild Eevee appeared!",
+        ):
+            with self.subTest(announcement=announcement):
+                chat = f"A wild Ekans appeared!\n{caught}\n{announcement}\nTurn 1"
+                self.assertFalse(RealtimeRegionMonitor._chat_confirms_catch(chat))
+                self.assertTrue(RealtimeRegionMonitor._is_battle_mode(chat, True, 100))
+                self.assertFalse(OverlayWindow._auto_catch_has_new_catch_confirmation(
+                    SimpleNamespace(_auto_catch_chat_before_throw=""), chat,
+                ))
+                self.assertTrue(RealtimeRegionMonitor._chat_confirms_catch(f"{chat}\n{caught}"))
+                self.assertFalse(RealtimeRegionMonitor._is_battle_mode(f"{chat}\n{caught}", True, 100))
+
     def test_enabled_catch_filters_use_or_and_empty_elite_selection_means_all(
         self,
     ) -> None:
@@ -381,6 +408,8 @@ class AutoCatchingTests(unittest.TestCase):
             OverlayWindow._match_selected_pokemon_name
         )
         overlay._wild_pokemon_identity = OverlayWindow._wild_pokemon_identity
+        overlay._nature_matched_encounter_identity = None
+        overlay._encounter_nature_match = MethodType(OverlayWindow._encounter_nature_match, overlay)
         settings.auto_catching_desired_toggle.isChecked.return_value = True
         settings.stop_for_desired_pokemon_toggle.isChecked.return_value = True
         settings.desired_pokemon_input.text.return_value = "Pikachu"
@@ -513,12 +542,14 @@ class AutoCatchingTests(unittest.TestCase):
             _normalise_wild_pokemon_name=OverlayWindow._normalise_wild_pokemon_name,
             _wild_pokemon_identity=OverlayWindow._wild_pokemon_identity,
             _match_selected_pokemon_name=OverlayWindow._match_selected_pokemon_name,
+            _nature_matched_encounter_identity=None,
             _normalise_item_name=OverlayWindow._normalise_item_name,
         )
         overlay._auto_catch_matches_filters = MethodType(
             OverlayWindow._auto_catch_matches_filters,
             overlay,
         )
+        overlay._encounter_nature_match = MethodType(OverlayWindow._encounter_nature_match, overlay)
         overlay._start_auto_catch_item_selection = MethodType(
             OverlayWindow._start_auto_catch_item_selection,
             overlay,

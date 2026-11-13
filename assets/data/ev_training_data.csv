@@ -1,0 +1,79 @@
+training_category,region,location,pokemon,ev_yield
+HP,Kanto,Mt. Moon E4,Whismur,1 HP
+HP,Kanto,Viridian Forest,Caterpie,1 HP
+HP,Kanto,Route 9 (Surf),Wishiwashi,1 HP
+HP,Sevii Islands,Four Island (Surf),Wishiwashi,1 HP
+HP,Sevii Islands,Four Island (Surf),Marill,2 HP
+HP,Sevii Islands,Four Island (Surf),Wooper,1 HP
+HP,Sevii Islands,Four Island (Surf),Slowpoke,1 HP
+HP,Hoenn,Rusturf Tunnel,Whismur,1 HP
+HP,Hoenn,Rusturf Tunnel,Loudred,2 HP
+HP,Hoenn,Rusturf Tunnel,Exploud,3 HP
+Attack,Kanto,Mt. Moon E1,Paras,1 Attack
+Attack,Johto,Route 42 (Fish),Gyarados,2 Attack
+Attack,Johto,Route 42 (Fish),Seaking,2 Attack
+Attack,Hoenn,Dewford Town (Fish),Gyarados,2 Attack
+Attack,Hoenn,Dewford Town (Fish),Seaking,2 Attack
+Attack,Hoenn,Dewford Town (Fish),Corphish,1 Attack
+Attack,Sinnoh,Snowpoint City (Fish),Gyarados,2 Attack
+Attack,Sinnoh,Snowpoint City (Fish),Goldeen,1 Attack
+Defense,Kanto,Mt. Moon E3,Geodude,1 Defense
+Defense,Kanto,Viridian Forest,Kakuna,2 Defense
+Defense,Kanto,Viridian Forest,Metapod,2 Defense
+Defense,Johto,Ember Cave,Graveler,2 Defense
+Defense,Johto,Ember Cave,Magcargo,2 Defense
+Defense,Hoenn,Route 111,Graveler,2 Defense
+Defense,Hoenn,Route 111,Sandslash,2 Defense
+Special Attack,Kanto,Mt. Moon E2,Slugma,1 Special Attack
+Special Attack,Kanto,Pokemon Tower,Gastly,1 Special Attack
+Special Attack,Kanto,Pokemon Tower,Haunter,2 Special Attack
+Special Attack,Kanto,Pokemon Tower,Gengar,3 Special Attack
+Special Attack,Sevii Islands,Hellfire Cavern,Slugma,1 Special Attack
+Special Attack,Sinnoh,Old Chateau,Gastly,1 Special Attack
+Special Attack,Sinnoh,Old Chateau,Haunter,2 Special Attack
+Special Attack,Sinnoh,Old Chateau,Gengar,3 Special Attack
+Special Defense,Kanto,Vermilion City (Surf),Tentacool,1 Special Defense
+Special Defense,Johto,Blackthorn City (Surf),Tentacruel,2 Special Defense
+Special Defense,Sinnoh,Sunnyshore City (Surf),Tentacruel,2 Special Defense
+Speed,Kanto,Diglett's Cave,Diglett,1 Speed
+Speed,Kanto,Diglett's Cave,Dugtrio,2 Speed
+Speed,Kanto,Route 1,Rattata,1 Speed
+Speed,Kanto,Route 1,Pidgey,1 Speed
+Speed,Kanto,Route 16,Raticate,2 Speed
+Speed,Kanto,Route 16,Spearow,1 Speed
+Speed,Sevii Islands,Hunty's Path,Raticate,2 Speed
+Speed,Sevii Islands,Hunty's Path,Fearow,2 Speed
+Speed,Sevii Islands,Hunty's Path,Pidgeotto,2 Speed
+Speed,Sevii Islands,Hunty's Path,Cutiefly,1 Speed
+Speed,Sevii Islands,Hunty's Path,Jumpluff,3 Speed
+Speed,Hoenn,Meteor Falls,Golbat,2 Speed
+Attack + Speed,Kanto,Route 22,Pidgey,1 Speed
+Attack + Speed,Kanto,Route 22,Rattata,1 Speed
+Attack + Speed,Kanto,Route 22,Spearow,1 Speed
+Attack + Speed,Kanto,Route 22,Ekans,1 Attack
+Attack + Speed,Kanto,Route 22,Mankey,1 Attack
+Attack + Speed,Kanto,Pokemon Mansion,Raticate,2 Speed
+Attack + Speed,Kanto,Pokemon Mansion,Arbok,2 Attack
+Attack + Speed,Johto,Route 43,Pidgeot,3 Speed
+Attack + Speed,Johto,Route 43,Toucannon,3 Attack
+Attack + Speed,Johto,Route 43,Gumshoos,2 Attack
+Attack + Speed,Johto,Route 43,Bewear,2 Attack
+Attack + Speed,Unova,Unova Route 3,Watchog,2 Attack
+Attack + Speed,Unova,Unova Route 3,Raticate,2 Speed
+Attack + Speed,Unova,Unova Route 3,Stoutland,3 Attack
+Attack + Speed,Unova,Unova Route 3,Liepard,2 Speed
+Special Attack + Speed,Sinnoh,Lost Tower,Zubat,1 Speed
+Special Attack + Speed,Sinnoh,Lost Tower,Golbat,2 Speed
+Special Attack + Speed,Sinnoh,Lost Tower,Gastly,1 Special Attack
+Special Attack + Speed,Sinnoh,Lost Tower,Haunter,2 Special Attack
+HP + Defense,Hoenn,Route 112,Magcargo,2 Defense
+HP + Defense,Hoenn,Route 112,Marill,2 HP
+HP + Special Defense,Sevii Islands,Deep Icefall Cave (Surf),Tentacool,1 Special Defense
+HP + Special Defense,Sevii Islands,Deep Icefall Cave (Surf),Marill,2 HP
+HP + Special Defense,Sevii Islands,Deep Icefall Cave (Surf),Wooper,1 HP
+HP + Special Defense,Sevii Islands,Deep Icefall Cave (Surf),Seel,1 Special Defense
+HP + Special Defense,Sevii Islands,Deep Icefall Cave (Surf),Slowpoke,1 HP
+HP + Special Defense,Unova,Unova Route 4 (Surf),Tentacruel,2 Special Defense
+HP + Special Defense,Unova,Unova Route 4 (Surf),Marill,2 HP
+HP + Special Defense,Unova,Unova Route 4 (Surf),Alomomola,2 HP
+HP + Special Defense,Unova,Unova Route 4 (Surf),Slowpoke,1 HP

@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QToolButton
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QToolButton, QWidget
 
 from launcher.styles.style_loader import load_stylesheet
 from models.region_config import SavedRegion
@@ -278,6 +278,97 @@ class OverlayLogPanelTests(_PanelUiTestCase):
 
 
 class PokemonSummaryPanelTests(_PanelUiTestCase):
+    def test_summary_collapse_keeps_live_metrics_and_restores_the_rarity_breakdown(self) -> None:
+        panel = self._create_widget(PokemonEncounterSummaryWindow)
+        panel.set_daily_count(1234)
+        panel.set_rarity_counts({"c": 1200, "r": 34})
+        panel._elapsed_session_ms = 3661000
+        panel.start_session_timer()
+        panel.start_encounter("Eevee")
+        self._show(panel)
+        expanded_size = QSize(panel.size())
+        self.assertFalse(panel.collapse_button.isChecked())
+        self.assertEqual(panel.collapse_button.toolTip(), "Collapse Pokémon Summary")
+        self.assertTrue(panel.rarity_section.isVisible())
+        changes = []
+        panel.preferred_size_changed.connect(lambda: changes.append(QSize(panel._preferred_size)))
+
+        QTest.mouseClick(panel.collapse_button, Qt.MouseButton.LeftButton)
+        self.application.processEvents()
+
+        self.assertTrue(panel.collapse_button.isChecked())
+        self.assertEqual(panel.collapse_button.toolTip(), "Expand Pokémon Summary")
+        self.assertEqual(panel.collapse_button.accessibleName(), "Expand Pokémon Summary")
+        self.assertTrue(panel.rarity_section.isHidden())
+        self.assertLess(panel.height(), expanded_size.height())
+        self.assertEqual(panel.width(), expanded_size.width())
+        self.assertEqual(panel.content_scroll_area.verticalScrollBar().maximum(), 0)
+        for label in (panel.current_pokemon_label, panel.daily_count_label, panel.timer_label):
+            self.assertTrue(label.isVisible())
+            viewport = panel.content_scroll_area.viewport()
+            self.assertTrue(viewport.rect().contains(QRect(label.mapTo(viewport, QPoint()), label.size())))
+        self.assertTrue(panel._session_timer.isValid())
+        self.assertEqual(panel._elapsed_session_ms, 3661000)
+        self.assertEqual(panel.timer_label.text(), "01:01:01")
+        self.assertEqual(panel.session_status_label.text(), "Active")
+
+        panel.set_daily_count(1235)
+        panel.set_rarity_counts({"c": 1200, "r": 35})
+        panel.start_encounter("Shiny Pikachu", "#FACC15")
+        QTest.mouseClick(panel.collapse_button, Qt.MouseButton.LeftButton)
+        self.application.processEvents()
+
+        self.assertEqual(panel.size(), expanded_size)
+        self.assertTrue(panel.rarity_section.isVisible())
+        self.assertEqual(panel.daily_count_label.text(), "1,235")
+        self.assertIn("Shiny Pikachu", panel.current_pokemon_label.text())
+        self.assertIn("#FACC15", panel.current_pokemon_label.text())
+        self.assertIn("Rare: 35", panel.rarity_counts_label.text())
+        self.assertTrue(panel._session_timer.isValid())
+        self.assertEqual(len(changes), 2)
+        self.assertEqual(panel.collapse_button.focusPolicy(), Qt.FocusPolicy.NoFocus)
+        self.assertTrue(panel.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus)
+        self.assertTrue(panel.testAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating))
+
+    def test_summary_collapse_does_not_reopen_a_hidden_panel_or_reset_its_state(self) -> None:
+        panel = self._create_widget(PokemonEncounterSummaryWindow)
+        panel.collapse_button.setChecked(True)
+        self.assertFalse(panel.isVisible())
+        self._show(panel)
+        collapsed_size = QSize(panel.size())
+        panel.hide()
+        panel.set_daily_count(42)
+        panel.start_encounter("Pikachu")
+        self._show(panel)
+
+        self.assertTrue(panel.collapse_button.isChecked())
+        self.assertTrue(panel.rarity_section.isHidden())
+        self.assertEqual(panel.size(), collapsed_size)
+        self.assertEqual(panel.daily_count_label.text(), "42")
+        panel.hide()
+        panel.collapse_button.setChecked(False)
+        self.assertFalse(panel.isVisible())
+
+    def test_summary_toggle_preserves_dragged_positions_and_clamps_expansion(self) -> None:
+        panel = self._create_widget(PokemonEncounterSummaryWindow)
+        bounds = QRect(100, 100, 640, 480)
+        panel.show_for_game(bounds, size_limit=QSize(280, 250))
+        panel.move(150, 200)
+        panel.setProperty("_overlay_user_moved", True)
+        position = QPoint(panel.pos())
+        QTest.mouseClick(panel.collapse_button, Qt.MouseButton.LeftButton)
+        self.assertEqual(panel.pos(), position)
+        panel.move(150, bounds.bottom() - panel.height() + 1)
+        QTest.mouseClick(panel.collapse_button, Qt.MouseButton.LeftButton)
+        self.application.processEvents()
+
+        self.assertTrue(bounds.contains(panel.geometry()))
+        self.assertEqual(panel.height(), 250)
+        self.assertEqual(panel.x(), 150)
+        self.assertTrue(panel.property("_overlay_user_moved"))
+        button_rect = QRect(panel.collapse_button.mapTo(panel, QPoint()), panel.collapse_button.size())
+        self.assertTrue(panel.rect().contains(button_rect))
+
     def test_summary_metrics_and_encounter_html_are_safe_and_readable(self) -> None:
         panel = self._create_widget(PokemonEncounterSummaryWindow)
         self.assertEqual(panel.current_pokemon_label.text(), "Waiting for an encounter")
@@ -576,6 +667,102 @@ class OverlayPanelPlacementTests(_PanelUiTestCase):
         self.assertGreater(diagnostics.height(), compact_height)
         self.assertIn("Retain this diagnostic", diagnostics.log_view.toPlainText())
 
+    def test_collapsing_the_summary_reflows_logs_and_survives_hiding_the_overlay(self) -> None:
+        _full, client = self._update(800, 600)
+        summary = self.overlay.pokemon_encounter_summary_window
+        diagnostics = self.overlay.region_test_log_window
+        expanded_height = summary.height()
+        original_log_height = diagnostics.height()
+        diagnostics.append_entry("INFO", "Keep this diagnostic while collapsing")
+        QTest.mouseClick(summary.collapse_button, Qt.MouseButton.LeftButton)
+        self.application.processEvents()
+
+        self.assertLess(summary.height(), expanded_height)
+        self.assertGreater(diagnostics.height(), original_log_height)
+        self._assert_separate_and_bounded(client)
+        self.overlay.toggle_overlay_visibility()
+        self.overlay.toggle_overlay_visibility()
+        _full, client = self._update(800, 600)
+        self.assertTrue(summary.collapse_button.isChecked())
+        self.assertTrue(summary.rarity_section.isHidden())
+        self._assert_separate_and_bounded(client)
+        QTest.mouseClick(summary.collapse_button, Qt.MouseButton.LeftButton)
+        self.application.processEvents()
+        self.assertEqual(summary.height(), expanded_height)
+        self.assertEqual(diagnostics.height(), original_log_height)
+        self.assertIn("Keep this diagnostic while collapsing", diagnostics.log_view.toPlainText())
+        self._assert_separate_and_bounded(client)
+
+    def test_desired_and_elite_search_popups_do_not_hide_the_overlay_when_focused(self) -> None:
+        full, _client = self._update(1000, 700)
+        settings = self.overlay.settings_window
+        settings.stop_for_desired_pokemon_toggle.setChecked(True)
+        settings.stop_for_elite_toggle.setChecked(True)
+        settings.desired_pokemon_advanced_toggle.setChecked(True)
+        settings.elite_pokemon_advanced_toggle.setChecked(True)
+        settings._select_settings_page(1)
+        self.overlay.buttons["settings"].click()
+        tracker = self.overlay._window_tracker
+        api = Mock()
+        api.IsWindowVisible.return_value = True
+        api.IsIconic.return_value = False
+        api.GetWindowThreadProcessId.side_effect = lambda hwnd, pointer: setattr(
+            pointer._obj, "value", 99 if hwnd == 42 else 100,
+        )
+
+        def get_window_rect(_hwnd, pointer):
+            rect = pointer._obj
+            rect.left, rect.top = full.left(), full.top()
+            rect.right, rect.bottom = full.right() + 1, full.bottom() + 1
+            return True
+
+        api.GetWindowRect.side_effect = get_window_rect
+        api.EnumWindows.side_effect = lambda callback, process_id: callback(42, process_id)
+        # Qt.Popup can be ownerless on Windows. Recognize its Qt ancestry,
+        # rather than depending on a mocked native owner that is not present.
+        api.GetWindow.return_value = 0
+        self.overlay._auto_battle_input = Mock()
+        with patch.object(tracker, "_user32", api), patch.object(
+            tracker, "_process_id", 99,
+        ), patch("overlay.window_tracker.physical_to_logical_rect", side_effect=QRect):
+            for picker in (settings.desired_pokemon_input, settings.elite_pokemon_input):
+                with self.subTest(picker=picker.popup.findChild(QLabel).text()):
+                    settings.content_scroll_area.ensureWidgetVisible(picker)
+                    self.application.processEvents()
+                    QTest.mouseClick(picker.display, Qt.MouseButton.LeftButton)
+                    self.application.processEvents()
+                    popup_id = int(picker.popup.winId())
+                    api.GetForegroundWindow.return_value = popup_id
+                    tracker._refresh()
+                    self.assertTrue(self.overlay.isVisible())
+                    self.assertTrue(settings.isVisible())
+                    self.assertTrue(picker.popup.isVisible())
+                    QTest.mouseClick(picker.search_input, Qt.MouseButton.LeftButton)
+                    QTest.keyClicks(picker.search_input, "pikachu")
+                    tracker._refresh()
+                    self.assertTrue(settings.isVisible())
+                    self.assertTrue(picker.popup.isVisible())
+                    self.assertFalse(picker._items_by_name["pikachu"].isHidden())
+                    self.assertTrue(picker._items_by_name["bulbasaur"].isHidden())
+                    picker.rarity_filter.showPopup()
+                    self.application.processEvents()
+                    rarity_popup = picker.rarity_filter.view().window()
+                    rarity_popup_id = int(rarity_popup.winId())
+                    api.GetForegroundWindow.return_value = rarity_popup_id
+                    tracker._refresh()
+                    self.assertTrue(self.overlay.isVisible())
+                    self.assertTrue(settings.isVisible())
+                    self.assertTrue(picker.popup.isVisible())
+                    self.assertTrue(rarity_popup.isVisible())
+                    picker.rarity_filter.hidePopup()
+                    picker.popup.hide()
+            unrelated_window = self._create_widget(QWidget)
+            api.GetForegroundWindow.return_value = int(unrelated_window.winId())
+            tracker._refresh()
+            self.assertFalse(self.overlay.isVisible())
+            self.assertFalse(settings.isVisible())
+        self.assertEqual(self.overlay._auto_battle_input.method_calls, [])
+
     def test_region_selection_hides_logs_and_restores_the_layout_afterward(self) -> None:
         _full, client = self._update(800, 600)
         self.overlay._region_selection_active = True
@@ -704,6 +891,9 @@ class TrackerClientGeometryTests(_PanelUiTestCase):
     def _tracker(self):
         tracker = GameWindowTracker()
         self.addCleanup(tracker.deleteLater)
+        find_widget = patch("overlay.window_tracker.QWidget.find", return_value=None)
+        find_widget.start()
+        self.addCleanup(find_widget.stop)
         api = Mock()
 
         def get_client_rect(_window_id, pointer):
@@ -817,6 +1007,43 @@ class TrackerClientGeometryTests(_PanelUiTestCase):
                 with patch("overlay.window_tracker.physical_to_logical_rect", side_effect=QRect):
                     tracker._refresh()
                 self.assertEqual(updates[-1], visible)
+
+    def test_owned_settings_popups_are_trusted_only_while_their_panel_is_registered(self) -> None:
+        tracker, api = self._tracker()
+        tracker._process_id = 99
+        tracker.set_auxiliary_window(70)
+        api.IsWindowVisible.return_value = True
+        api.GetWindowThreadProcessId.side_effect = lambda hwnd, pointer: setattr(
+            pointer._obj, "value", 99 if hwnd == 42 else 100,
+        )
+        owners = {71: 70, 72: 71, 80: 81, 81: 80, 82: 83}
+        api.GetWindow.side_effect = lambda hwnd, _kind: owners.get(hwnd, 0)
+
+        def get_window_rect(_hwnd, pointer):
+            rect = pointer._obj
+            rect.left, rect.top, rect.right, rect.bottom = 100, 100, 1380, 820
+            return True
+
+        api.GetWindowRect.side_effect = get_window_rect
+        api.EnumWindows.side_effect = lambda callback, process_id: callback(42, process_id)
+        updates = []
+        tracker.window_updated.connect(lambda _hwnd, _geometry, visible: updates.append(visible))
+        for foreground, minimized, visible in (
+            (70, False, True), (71, False, True), (72, False, True),
+            (88, False, False), (82, False, False), (80, False, False),
+            (None, False, False), (71, True, False), (42, False, True),
+        ):
+            with self.subTest(foreground=foreground, minimized=minimized):
+                api.GetForegroundWindow.return_value = foreground
+                api.IsIconic.return_value = minimized
+                with patch("overlay.window_tracker.physical_to_logical_rect", side_effect=QRect):
+                    tracker._refresh()
+                self.assertEqual(updates[-1], visible)
+        tracker.set_auxiliary_window(None)
+        api.GetForegroundWindow.return_value = 72
+        with patch("overlay.window_tracker.physical_to_logical_rect", side_effect=QRect):
+            tracker._refresh()
+        self.assertFalse(updates[-1])
 
 
 if __name__ == "__main__":

@@ -100,6 +100,20 @@ class LauncherRefreshTests(_QtUiTestCase):
             self.window.overlay_window.buttons["settings"].property("panelOpen")
         )
 
+    def test_launcher_can_activate_settings_already_opened_over_the_game(self) -> None:
+        settings = self.window.overlay_window.settings_window
+        settings.show_at(QRect(0, 0, 1000, 700), QRect(200, 30, 296, 116))
+        settings.auto_fishing_reaction_lead_spin.setValue(80)
+        self.assertTrue(settings.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus)
+
+        self.window.settings_button.click()
+        self.application.processEvents()
+
+        self.assertTrue(settings.isVisible())
+        self.assertFalse(settings.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus)
+        self.assertFalse(settings.testAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating))
+        self.assertEqual(settings.auto_fishing_reaction_lead_spin.value(), 80)
+
     def test_background_transparency_is_restored_applied_and_saved_live(self) -> None:
         region = SavedRegion("fishing", "Fishing Bar", 10, 20, 300, 40)
         self.store.load.return_value = AppSettings(
@@ -151,6 +165,42 @@ class LauncherRefreshTests(_QtUiTestCase):
         self.assertEqual(saved.pokemon_encounter_count, 128)
         self.assertEqual(saved.pokemon_encounter_rarity_counts["r"], 12)
         self.assertTrue(saved.auto_fishing_press_f_on_missing_zone)
+
+    def test_special_popup_auto_close_is_restored_and_saved_live(self) -> None:
+        overlay = self.window.overlay_window
+        settings = overlay.settings_window
+        toggle = settings.auto_close_special_pokemon_message_toggle
+        self.assertTrue(toggle.isChecked())
+        self.assertTrue(settings._settings_pages._pages[1].isAncestorOf(toggle))
+        regions = (
+            SavedRegion("special-pokemon-message", "Message Box", 100, 150, 400, 200),
+            SavedRegion("special-pokemon-message", "Close Button", 460, 155, 30, 30),
+            SavedRegion("fishing", "Fishing Bar", 10, 20, 300, 40),
+        )
+        rarity_counts = {"c": 80, "uc": 20, "r": 12, "vr": 8, "er": 6, "l": 2}
+        self.store.load.return_value = AppSettings(
+            auto_close_special_pokemon_message=False, regions=regions,
+            use_mouse_clicking=True, auto_catching_item="Ultra Ball",
+            auto_fishing_press_f_on_missing_zone=True,
+            overlay_background_transparency=16,
+            pokemon_encounter_count=128, pokemon_encounter_rarity_counts=rarity_counts,
+        )
+        self.window._load_saved_settings()
+        self.assertFalse(toggle.isChecked())
+        for enabled in (True, False):
+            with self.subTest(auto_close=enabled):
+                self.store.save.reset_mock()
+                toggle.setChecked(enabled)
+                self.store.save.assert_called_once()
+                saved = self.store.save.call_args.args[0]
+                self.assertEqual(saved.auto_close_special_pokemon_message, enabled)
+                self.assertEqual(saved.regions, regions)
+                self.assertTrue(saved.use_mouse_clicking)
+                self.assertEqual(saved.auto_catching_item, "Ultra Ball")
+                self.assertTrue(saved.auto_fishing_press_f_on_missing_zone)
+                self.assertEqual(saved.overlay_background_transparency, 16)
+                self.assertEqual(saved.pokemon_encounter_count, 128)
+                self.assertEqual(saved.pokemon_encounter_rarity_counts, rarity_counts)
 
     def test_selecting_a_valid_game_updates_readiness_and_saves_the_location(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -329,6 +379,71 @@ class SettingsRefreshTests(_QtUiTestCase):
         QTest.keyClick(buttons[0], Qt.Key.Key_Left)
         self.assertEqual(self.settings._settings_pages._current_index, 5)
 
+    def test_game_settings_remain_non_activating_after_launcher_use_and_reopening(self) -> None:
+        for _ in range(2):
+            self.settings.show_for_launcher(QRect(100, 100, 460, 400))
+            self.assertFalse(self.settings.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus)
+            self.settings.hide()
+            self._show_settings()
+            self.assertTrue(self.settings.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus)
+            self.assertTrue(self.settings.testAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating))
+
+            QTest.mouseClick(self.settings.settings_tabs._buttons[2], Qt.MouseButton.LeftButton)
+            self.assertEqual(self.settings._settings_pages._current_index, 2)
+            before = self.settings.auto_fishing_toggle.isChecked()
+            QTest.mouseClick(self.settings.auto_fishing_toggle, Qt.MouseButton.LeftButton)
+            self.assertEqual(self.settings.auto_fishing_toggle.isChecked(), not before)
+            QTest.mouseClick(self.settings.ok_button, Qt.MouseButton.LeftButton)
+            self.assertFalse(self.settings.isVisible())
+
+    def test_overlay_item_dropdown_selects_and_dismisses_without_accepting_focus(self) -> None:
+        self.settings.auto_catching_toggle.setChecked(True)
+        self._show_settings()
+        self.settings.settings_tabs._buttons[1].click()
+        combo = self.settings.auto_catching_item_selection
+        self.settings.content_scroll_area.ensureWidgetVisible(combo)
+        self.application.processEvents()
+        combo.showPopup()
+        self.application.processEvents()
+        popup = combo.view().window()
+        self.assertTrue(popup.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus)
+        self.assertTrue(popup.testAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating))
+
+        index = combo.model().index(combo.findText("Great Ball"), 0)
+        QTest.mouseClick(combo.view().viewport(), Qt.MouseButton.LeftButton,
+                         pos=combo.view().visualRect(index).center())
+        self.assertEqual(combo.currentText(), "Great Ball")
+        self.assertFalse(popup.isVisible())
+        combo.showPopup()
+        self.application.processEvents()
+        QTest.mouseClick(self.settings.settings_tabs._buttons[0], Qt.MouseButton.LeftButton)
+        self.assertFalse(popup.isVisible())
+        self.assertEqual(self.settings._settings_pages._current_index, 0)
+
+        self.settings.settings_tabs._buttons[1].click()
+        combo.showPopup()
+        self.settings.hide()
+        self.assertFalse(popup.isVisible())
+
+    def test_launcher_restores_keyboard_entry_and_normal_item_dropdown(self) -> None:
+        self._show_settings()
+        combo = self.settings.auto_catching_item_selection
+        self.settings.auto_catching_toggle.setChecked(True)
+        self.settings.settings_tabs._buttons[1].click()
+        combo.showPopup()
+        combo.hidePopup()
+
+        self.settings.show_for_launcher(QRect(100, 100, 460, 400))
+        combo.showPopup()
+        self.application.processEvents()
+        popup = combo.view().window()
+        self.assertFalse(popup.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus)
+        self.assertFalse(popup.testAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating))
+        combo.hidePopup()
+        combo.lineEdit().selectAll()
+        QTest.keyClicks(combo.lineEdit(), "Custom Ball")
+        self.assertEqual(combo.currentText(), "Custom Ball")
+
     def test_pokemon_picker_opens_and_toggles_selection_using_the_keyboard(self) -> None:
         picker = self._open_picker()
         picker.display.setFocus()
@@ -355,6 +470,40 @@ class SettingsRefreshTests(_QtUiTestCase):
         picker.search_input.clear()
         self.assertTrue(picker.empty_state.isHidden())
         self.assertTrue(picker.select_all.isEnabled())
+
+    def test_pokemon_picker_closes_with_its_page_and_preserves_search_and_selection(self) -> None:
+        picker = self._open_picker()
+        picker.setText("Pikachu")
+        for close in (
+            lambda: self.settings.settings_tabs._buttons[0].click(),
+            lambda: self.settings.desired_pokemon_advanced_toggle.setChecked(False),
+            self.settings.hide,
+        ):
+            self.settings.desired_pokemon_advanced_toggle.setChecked(True)
+            self.settings.settings_tabs._buttons[1].click()
+            self._show_settings()
+            QTest.mouseClick(picker.display, Qt.MouseButton.LeftButton)
+            self.application.processEvents()
+            self.assertTrue(picker.popup.isVisible())
+            picker.search_input.setText("pikachu")
+            close()
+            self.application.processEvents()
+            self.assertFalse(picker.popup.isVisible())
+            self.assertEqual(picker.search_input.text(), "pikachu")
+            self.assertEqual(picker.text(), "Pikachu")
+
+    def test_pokemon_rarity_arrow_does_not_have_a_separate_background_block(self) -> None:
+        picker = self._open_picker()
+        picker._show_picker()
+        self.application.processEvents()
+        combo = picker.rarity_filter
+        image = combo.grab().toImage()
+        self.assertFalse(image.isNull())
+        scale = image.devicePixelRatio()
+        self.assertEqual(
+            image.pixelColor(round(30 * scale), round(4 * scale)),
+            image.pixelColor(round((combo.width() - 16) * scale), round(4 * scale)),
+        )
 
     def test_long_toggle_labels_wrap_and_the_whole_row_is_clickable(self) -> None:
         toggle = ToggleSwitch(
@@ -394,6 +543,42 @@ class SettingsRefreshTests(_QtUiTestCase):
         self.assertTrue(bounds.contains(self.settings.geometry()))
         self.assertLessEqual(self.settings.height(), bounds.height() - 16)
         self.assertGreater(self.settings.content_scroll_area.viewport().height(), 0)
+
+    def test_settings_layout_stays_consistent_when_pages_expand_and_the_window_shrinks(self) -> None:
+        for bounds, anchor in (
+            (QRect(0, 0, 1366, 768), QRect(275, 44, 296, 116)),
+            (QRect(100, 100, 400, 480), QRect(150, 130, 296, 116)),
+        ):
+            self.settings.show_at(bounds, anchor)
+            for index, toggle in (
+                (0, self.settings.auto_catching_toggle),
+                (1, self.settings.desired_pokemon_advanced_toggle),
+                (4, self.settings.auto_walk_advanced_toggle),
+            ):
+                self.settings.settings_tabs._buttons[index].click()
+                for expanded in (True, False):
+                    with self.subTest(bounds=bounds, page=index, expanded=expanded):
+                        toggle.setChecked(expanded)
+                        self.application.processEvents()
+                        self.assertTrue(bounds.contains(self.settings.geometry()))
+                        self.assertLessEqual(
+                            self.settings.minimumSizeHint().height(), self.settings.height(),
+                        )
+                        self.assertTrue(self.settings.rect().contains(QRect(
+                            self.settings.ok_button.mapTo(self.settings, QPoint()),
+                            self.settings.ok_button.size(),
+                        )))
+
+    def test_collapsing_movement_options_removes_the_extra_scroll_space(self) -> None:
+        self._show_settings()
+        self.settings.settings_tabs._buttons[4].click()
+        self.settings.auto_walk_advanced_toggle.setChecked(True)
+        self.application.processEvents()
+        scrollbar = self.settings.content_scroll_area.verticalScrollBar()
+        self.assertGreater(scrollbar.maximum(), 0)
+        self.settings.auto_walk_advanced_toggle.setChecked(False)
+        QTest.qWait(20)
+        self.assertEqual(scrollbar.maximum(), 0)
 
 
 class StyleAssetTests(_QtUiTestCase):

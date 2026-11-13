@@ -100,6 +100,7 @@ class OverlayUiTests(unittest.TestCase):
             headings,
             [
                 "Battle automation",
+                "Special encounter popup",
                 "Encounter rules",
                 "Auto Catching Configuration",
                 "Fishing automation",
@@ -523,6 +524,8 @@ class OverlayUiTests(unittest.TestCase):
             self.assertTrue(button.rect().contains(icon))
             self.assertTrue(button.rect().contains(caption))
             self.assertFalse(icon.intersects(button.count_label.geometry()))
+            for line in button.caption_lines():
+                self.assertLessEqual(button.fontMetrics().horizontalAdvance(line), caption.width())
         self.assertEqual(region_window.toolbar_scroll_area.verticalScrollBar().maximum(), 0)
         region_window.close()
 
@@ -550,6 +553,7 @@ class OverlayUiTests(unittest.TestCase):
         overlay = Mock()
         overlay._auto_run_clicked = False
         overlay._auto_run_pending = False
+        overlay._auto_run_allowed.return_value = True
         overlay._auto_run_ready.return_value = True
         overlay._stop_auto_run_for_encounter.return_value = False
 

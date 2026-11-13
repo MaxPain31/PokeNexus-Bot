@@ -4,6 +4,8 @@ __pycache__/
 build/
 dist/
 screenshot/
+tests/fixtures/
 
 Game Bot.spec
 dist.zip
+battle_history.json

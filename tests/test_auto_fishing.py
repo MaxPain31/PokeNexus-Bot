@@ -45,6 +45,59 @@ class AutoFishingTests(unittest.TestCase):
 
         self.assertEqual(detection.moving_hook_x, 52)
 
+    def test_trees_water_and_scenery_do_not_form_fishing_markers(self) -> None:
+        detection = detect_fishing_markers(self._scenery_without_bar())
+
+        self.assertEqual(detection, FishingDetection(None, None, None))
+
+    def test_gauge_detection_ignores_larger_green_and_yellow_scenery(self) -> None:
+        image = self._bar_with_markers(yellow_left=22, hook_left=55)
+        image[:18, 5:160] = (0, 255, 0)
+        image[:18, 172:180] = (0, 255, 255)
+        image[49:, :160] = (0, 255, 0)
+
+        detection = detect_fishing_markers(image)
+
+        self.assertEqual(detection.target_zone, (80, 95))
+        self.assertEqual(detection.yellow_zone, (22, 45))
+        self.assertEqual(detection.moving_hook_x, 60)
+
+    def test_hook_touching_gray_rim_is_still_detected_inside_the_gauge(self) -> None:
+        image = self._bar_with_markers(yellow_left=22, hook_left=55)
+        hook_color = image[35, 60].copy()
+        image[23:25, 10:170] = hook_color
+        image[25, 22:60] = hook_color
+        image[25:31, 59:62] = hook_color
+
+        for scale in (0.75, 1.0, 1.5, 2.0):
+            with self.subTest(scale=scale):
+                scaled = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
+                detection = detect_fishing_markers(scaled)
+                self.assertIsNotNone(detection.target_zone)
+                self.assertIsNotNone(detection.moving_hook_x)
+                self.assertLessEqual(abs(detection.moving_hook_x - 60 * scale), 1)
+
+    def test_cyan_water_near_a_gauge_does_not_turn_its_end_cap_into_a_hook(self) -> None:
+        image = self._bar_with_markers(yellow_left=22, hook_left=55)
+        image[:, :5] = image[28, 100]
+        image[25:45, 5:10] = image[35, 60]
+
+        detection = detect_fishing_markers(image)
+
+        self.assertEqual(detection.target_zone, (80, 95))
+        self.assertEqual(detection.moving_hook_x, 60)
+
+    def test_scenery_does_not_reset_the_missing_zone_timer_or_trigger_space(self) -> None:
+        game_input = Mock()
+        monitor = self._monitor(game_input, press_f_on_missing_zone=True)
+        scenery = detect_fishing_markers(self._scenery_without_bar())
+        for observed_at in (1.0, 5.0, 10.9, 11.0):
+            monitor._handle_overlap(scenery, observed_at=observed_at)
+        game_input.tap_key.assert_not_called()
+        for observed_at in (11.01, 20.0, 50.0):
+            monitor._handle_overlap(scenery, observed_at=observed_at)
+        game_input.tap_key.assert_called_once_with(7, 0x46, duration_seconds=0.01, extended=False)
+
     def test_yellow_zone_overlapping_target_does_not_trigger(self) -> None:
         game_input = Mock()
         monitor = self._monitor(game_input)
@@ -180,6 +233,93 @@ class AutoFishingTests(unittest.TestCase):
         monitor.set_battle_active(False)
         monitor._handle_overlap(missing, observed_at=120.01)
         game_input.tap_key.assert_called_once_with(7, 0x46, duration_seconds=0.01, extended=False)
+
+    def test_region_configuration_pause_keeps_the_used_f_fallback_latched(self) -> None:
+        game_input = Mock()
+        monitor = self._monitor(game_input, press_f_on_missing_zone=True)
+        missing = FishingDetection(None, None, None)
+        monitor._handle_overlap(missing, observed_at=1.0)
+        monitor._handle_overlap(missing, observed_at=11.01)
+        with patch("capture.fishing_monitor.time.perf_counter", side_effect=(12.0, 100.0)):
+            monitor.set_configuration_paused(True)
+            monitor._handle_overlap(missing, observed_at=90.0)
+            monitor._handle_overlap(FishingDetection((80, 95), None, 85), observed_at=91.0)
+            monitor.set_configuration_paused(False)
+        monitor._handle_overlap(missing, observed_at=110.0)
+        monitor._handle_overlap(missing, observed_at=200.0)
+        game_input.tap_key.assert_called_once_with(7, 0x46, duration_seconds=0.01, extended=False)
+
+    def test_region_configuration_time_does_not_count_towards_the_strict_f_timeout(self) -> None:
+        game_input = Mock()
+        monitor = self._monitor(game_input, press_f_on_missing_zone=True)
+        missing = FishingDetection(None, None, None)
+        monitor._handle_overlap(missing, observed_at=1.0)
+        with patch("capture.fishing_monitor.time.perf_counter", side_effect=(5.0, 105.0)):
+            monitor.set_configuration_paused(True)
+            monitor.set_configuration_paused(True)
+            monitor._handle_overlap(missing, observed_at=100.0)
+            monitor.set_configuration_paused(False)
+            monitor.set_configuration_paused(False)
+        monitor._handle_overlap(missing, observed_at=110.9)
+        monitor._handle_overlap(missing, observed_at=111.0)
+        game_input.tap_key.assert_not_called()
+        monitor._handle_overlap(missing, observed_at=111.01)
+        game_input.tap_key.assert_called_once_with(7, 0x46, duration_seconds=0.01, extended=False)
+
+    def test_region_configuration_pause_keeps_space_latched_and_discards_stale_hook_velocity(self) -> None:
+        game_input = Mock()
+        monitor = self._monitor(game_input)
+        overlap = FishingDetection((80, 95), None, 85)
+        monitor._handle_overlap(overlap, observed_at=1.0)
+        monitor.set_configuration_paused(True)
+        monitor._handle_overlap(FishingDetection((80, 95), None, 20), observed_at=20.0)
+        monitor.set_configuration_paused(False)
+        self.assertIsNone(monitor._previous_hook_x)
+        self.assertIsNone(monitor._previous_detection_time)
+        monitor._handle_overlap(overlap, observed_at=100.0)
+        self.assertEqual(game_input.tap_key.call_count, 1)
+        monitor._handle_overlap(FishingDetection((80, 95), None, 20), observed_at=110.0)
+        monitor._handle_overlap(overlap, observed_at=111.0)
+        self.assertEqual([call.args[1] for call in game_input.tap_key.call_args_list], [0x20, 0x20])
+
+    def test_a_fishing_capture_started_before_configuration_resumes_cannot_send_a_key(self) -> None:
+        for detection, key in (
+            (FishingDetection(None, None, None), 0x46),
+            (FishingDetection((80, 95), None, 85), 0x20),
+        ):
+            with self.subTest(key=key):
+                game_input = Mock()
+                monitor = self._monitor(game_input, press_f_on_missing_zone=True)
+                monitor._green_zone_missing_since = 1.0
+                with patch("capture.fishing_monitor.time.perf_counter", side_effect=(5.0, 105.0)):
+                    monitor.set_configuration_paused(True)
+                    monitor.set_configuration_paused(False)
+                for captured_at in (104.0, 105.0):
+                    monitor._handle_overlap(detection, observed_at=112.0, capture_started_at=captured_at)
+                game_input.tap_key.assert_not_called()
+                self.assertIsNone(monitor._previous_hook_x)
+                monitor._handle_overlap(detection, observed_at=112.0, capture_started_at=105.01)
+                self.assertEqual(game_input.tap_key.call_count, 1)
+                self.assertEqual(game_input.tap_key.call_args.args[1], key)
+
+    def test_capture_errors_during_configuration_do_not_rearm_f_or_space(self) -> None:
+        game_input = Mock()
+        monitor = self._monitor(game_input, press_f_on_missing_zone=True)
+        monitor._missing_zone_fallback_pressed = monitor._overlap_latched = True
+        monitor._green_zone_missing_since = 1.0
+        monitor.set_configuration_paused(True)
+        image = self._bar_with_markers(yellow_left=85, hook_left=85)
+        monitor.image_capture = Mock(capture_window=Mock(side_effect=(RuntimeError("Capture unavailable"), image)))
+        monitor.region_cropper = Mock(crop=Mock(return_value=image))
+        with patch.object(monitor, "isInterruptionRequested", side_effect=(False, False, True)), patch(
+            "capture.fishing_monitor.time.sleep",
+        ):
+            monitor.run()
+        self.assertTrue(monitor._configuration_paused)
+        self.assertTrue(monitor._missing_zone_fallback_pressed)
+        self.assertTrue(monitor._overlap_latched)
+        self.assertEqual(monitor._green_zone_missing_since, 1.0)
+        game_input.tap_key.assert_not_called()
 
     def test_battle_rearms_a_used_fallback_even_without_a_green_frame(self) -> None:
         game_input = Mock()
@@ -432,6 +572,15 @@ class AutoFishingTests(unittest.TestCase):
         )
 
     @staticmethod
+    def _scenery_without_bar() -> np.ndarray:
+        image = np.empty((46, 459, 3), dtype=np.uint8)
+        image[:] = cv2.cvtColor(np.uint8([[[100, 180, 180]]]), cv2.COLOR_HSV2BGR)[0, 0]
+        cv2.fillPoly(image, [np.array(((31, 45), (65, 0), (100, 12), (164, 45)))], (0, 210, 0))
+        image[17:32, 100:112] = cv2.cvtColor(np.uint8([[[100, 70, 130]]]), cv2.COLOR_HSV2BGR)[0, 0]
+        image[:, 429:443] = (0, 255, 255)
+        return image
+
+    @staticmethod
     def _bar_with_markers(yellow_left: int, hook_left: int) -> np.ndarray:
         image = np.zeros((70, 180, 3), dtype=np.uint8)
         rail_color = cv2.cvtColor(
@@ -509,6 +658,47 @@ class AutoFishingBattleIntegrationTests(unittest.TestCase):
         self._missing(111.0)
         self.game_input.tap_key.assert_not_called()
         self._missing(111.01)
+        self.assertEqual(self.game_input.tap_key.call_args.args[1], 0x46)
+
+    def test_special_popup_keeps_fishing_paused_through_dismissal_and_battle_end_confirmation(self) -> None:
+        with patch("overlay.overlay_window.time.monotonic", return_value=1.0):
+            self._state(False)
+        self._missing(1.0)
+        self.overlay._auto_battle_input = Mock()
+        self.overlay.region_window.set_regions((
+            *self.overlay.region_window.regions,
+            SavedRegion("special-pokemon-message", "Close Button", 400, 250, 50, 25),
+        ))
+
+        def popup_state(visible, at, captured_at=None):
+            with patch("overlay.overlay_window.time.monotonic", return_value=at):
+                self.overlay._on_realtime_state_updated({
+                    "onBattleMode": False, "showingSpecialPokemonMessage": visible,
+                    "specialPokemonMessage": "Legendary Pokemon!" if visible else None,
+                    "captureStartedAt": at if captured_at is None else captured_at,
+                })
+            self._missing(at)
+
+        # The popup can hide all ordinary battle evidence. It still pauses F.
+        popup_state(True, 100.0)
+        popup_state(None, 150.0)
+        popup_state(False, 200.0)
+        for at in (210.0, 220.0, 230.0):
+            popup_state(False, at, captured_at=200.0)
+        self.game_input.tap_key.assert_not_called()
+        popup_state(False, 240.0)
+        self.assertFalse(self.overlay._special_pokemon_message_controller.blocked)
+        self.assertTrue(self.overlay._fishing_battle_active)
+        for at in (250.0, 260.0):
+            popup_state(False, at)
+            self.assertTrue(self.overlay._fishing_battle_active)
+        popup_state(False, 270.0)
+        self.assertFalse(self.overlay._fishing_battle_active)
+        self._missing(280.0)
+        self.game_input.tap_key.assert_not_called()
+        self._missing(280.01)
+        self._missing(300.0)
+        self.assertEqual(self.game_input.tap_key.call_count, 1)
         self.assertEqual(self.game_input.tap_key.call_args.args[1], 0x46)
 
     def test_short_ocr_gaps_do_not_resume_fishing_during_battle(self) -> None:

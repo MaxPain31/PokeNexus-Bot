@@ -2,6 +2,32 @@ import re
 from collections.abc import Mapping
 
 from core.battle_history import normalize_move_name
+from core.pokemon_name import pokemon_species_name
+from core.pokemon_targets import parse_pokemon_targets
+
+AUTO_BATTLE_MODES = ("Default", "Specific Only", "EV Training Only")
+
+
+def matches_battle_target(
+    wild_name: object,
+    selected_names: str,
+    *,
+    elite_only: bool = False,
+    is_elite: object = None,
+) -> bool | None:
+    """Exact species/form targeting; unreadable evidence is not a non-match."""
+    selected = {target.name.casefold() for target in parse_pokemon_targets(selected_names)}
+    if not selected:
+        return False
+    species = pokemon_species_name(wild_name).casefold()
+    if not species or not any(character.isalpha() for character in species):
+        return None
+    if species not in selected:
+        return False
+    if elite_only:
+        return is_elite if type(is_elite) is bool else None
+    return True
+
 
 _MOVE_ENTRY = re.compile(
     r"Move Slot ([1-4]):\s*(.*?)\s+\((.*?)\)",

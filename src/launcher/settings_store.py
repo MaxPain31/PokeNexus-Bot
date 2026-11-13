@@ -6,6 +6,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QStandardPaths
 
+from core.auto_battle import AUTO_BATTLE_MODES
+from core.ev_training import default_ev_values, load_ev_training_data, validate_ev_values
 from core.pokemon_rarity import RARITIES
 from models.region_config import REGION_FEATURE_LABELS, SavedRegion
 
@@ -14,6 +16,14 @@ from models.region_config import REGION_FEATURE_LABELS, SavedRegion
 class AppSettings:
     executable_path: str = ""
     auto_battle: bool = True
+    auto_battle_mode: str = "Default"
+    auto_battle_specific_pokemon: str = ""
+    auto_battle_elite_only: bool = False
+    ev_training_pokemon: str = ""
+    ev_training_category: str = ""
+    ev_training_current: dict[str, int] = field(default_factory=default_ev_values)
+    ev_training_targets: dict[str, int] = field(default_factory=default_ev_values)
+    ev_training_search: str = ""
     auto_switch_fainted_pokemon: bool = False
     stop_auto_battle_for_desired_pokemon: bool = False
     desired_pokemon: str = ""
@@ -55,6 +65,10 @@ class AppSettings:
     auto_catching_elite_filter: bool = False
     overlay_background_transparency: int = 0
     use_mouse_clicking: bool = False
+    auto_close_special_pokemon_message: bool = True
+    # Legacy lead-Pokemon choice only. S-only wild targets live in the Desired
+    # and Elite selections; loading this value must never enable a stop rule.
+    synchronize_pokemon: str = ""
 
 
 class SettingsStore:
@@ -91,6 +105,24 @@ class SettingsStore:
         settings = AppSettings(
             executable_path=values.get("executable_path", ""),
             auto_battle=self._parse_bool(values, "auto_battle", default=True),
+            auto_battle_mode=self._parse_choice(
+                values, "auto_battle_mode", AUTO_BATTLE_MODES, "Default",
+            ),
+            auto_battle_specific_pokemon=values.get("auto_battle_specific_pokemon", ""),
+            auto_battle_elite_only=self._parse_bool(
+                values, "auto_battle_elite_only", default=False,
+            ),
+            ev_training_pokemon=values.get("ev_training_pokemon", ""),
+            ev_training_category=self._parse_choice(
+                values, "ev_training_category",
+                ("", *dict.fromkeys(entry.training_category for entry in load_ev_training_data())),
+                "",
+            ),
+            # Legacy ranges were per-defeat filters, not current/target EVs.
+            # Keep their species selections but require an explicit new EV plan.
+            ev_training_current=self._parse_ev_values(values, "ev_training_current"),
+            ev_training_targets=self._parse_ev_values(values, "ev_training_targets"),
+            ev_training_search=values.get("ev_training_search", ""),
             auto_switch_fainted_pokemon=self._parse_bool(
                 values, "auto_switch_fainted_pokemon", default=False
             ),
@@ -223,6 +255,10 @@ class SettingsStore:
             use_mouse_clicking=self._parse_bool(
                 values, "use_mouse_clicking", default=False
             ),
+            auto_close_special_pokemon_message=self._parse_bool(
+                values, "auto_close_special_pokemon_message", default=True
+            ),
+            synchronize_pokemon=values.get("synchronize_pokemon", ""),
             regions=self._parse_regions(values.get("regions", "[]")),
         )
         if settings.auto_walk_max_duration_seconds < settings.auto_walk_min_duration_seconds:
@@ -233,6 +269,14 @@ class SettingsStore:
         return settings
 
     def save(self, settings: AppSettings) -> None:
+        if settings.auto_battle_mode not in AUTO_BATTLE_MODES:
+            raise ValueError("Invalid auto_battle_mode: expected Default, Specific Only, or EV Training Only.")
+        if settings.ev_training_category and settings.ev_training_category not in {
+            entry.training_category for entry in load_ev_training_data()
+        }:
+            raise ValueError("Invalid ev_training_category: expected a category from the EV training data.")
+        ev_current = validate_ev_values(settings.ev_training_current)
+        ev_targets = validate_ev_values(settings.ev_training_targets)
         if settings.auto_walk_direction not in ("Horizontal", "Vertical", "Random"):
             raise ValueError(
                 "Invalid auto-walk direction: expected Horizontal, Vertical, or Random."
@@ -286,12 +330,12 @@ class SettingsStore:
         )
         if any(
             not math.isfinite(duration)
-            or duration < 0.5
+            or duration < 0.1
             or duration > 3600.0
             for duration in durations
         ):
             raise ValueError(
-                "Auto-walk durations must be between 0.5 and 3600 seconds."
+                "Auto-walk durations must be between 0.1 and 3600 seconds."
             )
         if settings.auto_walk_max_duration_seconds < settings.auto_walk_min_duration_seconds:
             raise ValueError(
@@ -306,6 +350,14 @@ class SettingsStore:
             "# Game Bot settings\n"
             f"executable_path={settings.executable_path}\n"
             f"auto_battle={str(settings.auto_battle).lower()}\n"
+            f"auto_battle_mode={settings.auto_battle_mode}\n"
+            f"auto_battle_specific_pokemon={settings.auto_battle_specific_pokemon}\n"
+            f"auto_battle_elite_only={str(settings.auto_battle_elite_only).lower()}\n"
+            f"ev_training_pokemon={settings.ev_training_pokemon}\n"
+            f"ev_training_category={settings.ev_training_category}\n"
+            f"ev_training_current={json.dumps(ev_current, separators=(',', ':'))}\n"
+            f"ev_training_targets={json.dumps(ev_targets, separators=(',', ':'))}\n"
+            f"ev_training_search={settings.ev_training_search}\n"
             "auto_switch_fainted_pokemon="
             f"{str(settings.auto_switch_fainted_pokemon).lower()}\n"
             f"auto_run={str(settings.auto_run).lower()}\n"
@@ -363,10 +415,23 @@ class SettingsStore:
             "overlay_background_transparency="
             f"{settings.overlay_background_transparency}\n"
             f"use_mouse_clicking={str(settings.use_mouse_clicking).lower()}\n"
+            "auto_close_special_pokemon_message="
+            f"{str(settings.auto_close_special_pokemon_message).lower()}\n"
+            f"synchronize_pokemon={settings.synchronize_pokemon}\n"
             f"regions={regions_json}\n"
         )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(contents, encoding="utf-8")
+
+    @staticmethod
+    def _parse_ev_values(values: dict[str, str], key: str) -> dict[str, int]:
+        raw_value = values.get(key)
+        if raw_value is None:
+            return default_ev_values()
+        try:
+            return validate_ev_values(json.loads(raw_value))
+        except ValueError as error:
+            raise ValueError(f"Invalid {key}: {error}") from error
 
     @staticmethod
     def _parse_bool(
@@ -477,9 +542,9 @@ class SettingsStore:
             duration = float(raw_value)
         except ValueError as error:
             raise ValueError(f"Invalid value for {key}: expected seconds.") from error
-        if not math.isfinite(duration) or duration < 0.5 or duration > 3600.0:
+        if not math.isfinite(duration) or duration < 0.1 or duration > 3600.0:
             raise ValueError(
-                f"Invalid value for {key}: duration must be between 0.5 and 3600 seconds."
+                f"Invalid value for {key}: duration must be between 0.1 and 3600 seconds."
             )
         return duration
 

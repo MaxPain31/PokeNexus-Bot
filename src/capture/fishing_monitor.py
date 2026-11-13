@@ -77,6 +77,9 @@ class FishingMonitor(QThread):
         self.game_input = game_input or GameInput()
         self._input_state_lock = Lock()
         self._battle_active = False
+        self._configuration_paused = False
+        self._configuration_pause_started: float | None = None
+        self._configuration_resumed_at: float | None = None
         self._overlap_latched = False
         self._previous_hook_x: int | None = None
         self._previous_detection_time: float | None = None
@@ -87,6 +90,7 @@ class FishingMonitor(QThread):
     def run(self) -> None:
         while not self.isInterruptionRequested():
             try:
+                capture_started_at = time.perf_counter()
                 screenshot = self.image_capture.capture_window(self.window_handle)
                 cropped = self.region_cropper.crop(
                     screenshot,
@@ -102,7 +106,7 @@ class FishingMonitor(QThread):
                         f"Fishing screenshot saving stopped: {error}",
                     )
                 detection = detect_fishing_markers(cropped)
-                self._handle_overlap(detection)
+                self._handle_overlap(detection, capture_started_at=capture_started_at)
                 if self.publish_frames:
                     self.frame_updated.emit(
                         draw_fishing_detection(cropped, detection),
@@ -115,7 +119,8 @@ class FishingMonitor(QThread):
                     self.log_message.emit("ERROR", f"Fishing capture failed: {error}")
                     self._last_capture_error = message
                 with self._input_state_lock:
-                    self._reset_fishing_state()
+                    if not self._configuration_paused:
+                        self._reset_fishing_state()
                 time.sleep(self._ERROR_RETRY_INTERVAL_SECONDS)
 
     def set_battle_active(self, active: bool) -> None:
@@ -125,6 +130,27 @@ class FishingMonitor(QThread):
                 return
             self._battle_active = active
             self._reset_fishing_state()
+
+    def set_configuration_paused(self, paused: bool) -> None:
+        """Pause input without treating a region adjustment as a new cycle."""
+        with self._input_state_lock:
+            if self._configuration_paused == paused:
+                return
+            now = time.perf_counter()
+            if paused:
+                self._configuration_pause_started = now
+            elif self._configuration_pause_started is not None:
+                if self._green_zone_missing_since is not None:
+                    # The strict ten-second timeout counts active observation,
+                    # not time spent in an adjustment or reset dialog.
+                    self._green_zone_missing_since += max(
+                        0.0, now - self._configuration_pause_started,
+                    )
+                self._configuration_pause_started = None
+                self._configuration_resumed_at = now
+            self._configuration_paused = paused
+            self._previous_hook_x = None
+            self._previous_detection_time = None
 
     def _reset_missing_zone_timer(self) -> None:
         self._green_zone_missing_since = None
@@ -165,10 +191,22 @@ class FishingMonitor(QThread):
         self,
         detection: FishingDetection,
         observed_at: float | None = None,
+        *,
+        capture_started_at: float | None = None,
     ) -> None:
         # Capture stays outside this lock. Only the short key tap and its state
         # changes are serialized with battle entry/exit from the UI thread.
         with self._input_state_lock:
+            if self._configuration_paused:
+                return
+            if (
+                capture_started_at is not None
+                and self._configuration_resumed_at is not None
+                and capture_started_at <= self._configuration_resumed_at
+            ):
+                # A slow capture begun behind the dialog may finish after fresh
+                # realtime evidence resumes fishing. Wait for a new gauge too.
+                return
             if (
                 not self.auto_fishing
                 or self._battle_active

@@ -32,6 +32,8 @@ class TextExtractor:
         *,
         preserve_lines: bool = False,
         minimum_line_confidence: float = 0.0,
+        minimum_line_characters: int = 1,
+        page_segmentation_mode: int | None = None,
     ) -> OCRResult:
         """Extract recognized text and calculate word confidence."""
 
@@ -41,7 +43,11 @@ class TextExtractor:
         if image.ndim not in (2, 3):
             raise ValueError("Input image must be grayscale or color.")
 
-        config = f"--psm {self.page_segmentation_mode}"
+        psm = (
+            self.page_segmentation_mode
+            if page_segmentation_mode is None else page_segmentation_mode
+        )
+        config = f"--psm {psm} --dpi 300"
 
         # Get recognized words and their confidence scores.
         data: dict[str, Any] = pytesseract.image_to_data(
@@ -103,14 +109,23 @@ class TextExtractor:
         ]
 
         if preserve_lines:
-            text = "\n".join(
-                " ".join(words)
+            accepted_lines = [
+                (words, line_confidences)
                 for words, line_confidences in recognized_lines.values()
                 if words
                 and sum(line_confidences) / len(line_confidences)
                 >= minimum_line_confidence
-                and any(character.isalnum() for word in words for character in word)
-            ).strip()
+                and sum(character.isalnum() for word in words for character in word)
+                >= minimum_line_characters
+            ]
+            text = "\n".join(" ".join(words) for words, _ in accepted_lines).strip()
+            # Discarded background lines must not lower the confidence of the
+            # battle text we actually return (or inflate its word count).
+            accepted_words = [word for words, _ in accepted_lines for word in words]
+            accepted_confidences = [
+                confidence for _, line_confidences in accepted_lines
+                for confidence in line_confidences
+            ]
         else:
             text = " ".join(accepted_words).strip()
 

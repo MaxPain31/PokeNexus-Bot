@@ -12,6 +12,7 @@ from capture.image_processor import ImageProcessor
 from capture.region_cropper import RegionCropper
 from models.ocr_result import OCRResult
 from models.region_config import SavedRegion
+from ocr.region_ocr import RegionOCR
 from ocr.text_extractor import TextExtractor
 from utils.runtime_paths import user_data_path
 from utils.utils import text_split
@@ -21,14 +22,6 @@ LogCallback = Callable[[str, str], None]
 
 class RegionTestService:
     """Capture a game window, crop one saved region, and run image OCR."""
-
-    THRESHOLD_METHODS = (
-        "binary_230",
-        "binary_200",
-        "binary_167",
-        "otsu",
-        "otsu_inverted",
-    )
 
     def __init__(
         self,
@@ -42,6 +35,7 @@ class RegionTestService:
         self.region_cropper = region_cropper or RegionCropper()
         self.image_processor = image_processor or ImageProcessor()
         self.text_extractor = text_extractor or TextExtractor()
+        self.region_ocr = RegionOCR(self.image_processor, self.text_extractor)
         self.output_directory = output_directory or user_data_path("screenshot")
 
     def run(
@@ -88,42 +82,10 @@ class RegionTestService:
             cropped_path = self._save_image(cropped, f"{artifact_stem}_cropped.png")
             log("SUCCESS", f"Cropped region saved: {cropped_path}")
 
-        candidates: list[tuple[str, np.ndarray, OCRResult]] = []
-        for threshold_method in self.THRESHOLD_METHODS:
-            try:
-                processed = self.image_processor.process(
-                    cropped,
-                    threshold_method=threshold_method,
-                )
-                processed = self.image_processor.imageMorphology(
-                    processed, "close"
-                )
-                result = self.text_extractor.extract(processed)
-            except Exception as error:
-                log(
-                    "ERROR",
-                    f"OCR variant '{threshold_method}' failed: {error}",
-                )
-                continue
-
-            candidates.append((threshold_method, processed, result))
-            log(
-                "INFO",
-                f"OCR variant '{threshold_method}': "
-                f"confidence={result.mean_confidence:.2f}%, "
-                f"words={result.word_count}.",
-            )
-
-        if not candidates:
-            raise RuntimeError("OCR failed for every image-processing variant.")
-
-        method, processed, result = max(
-            candidates,
-            key=lambda candidate: (
-                candidate[2].mean_confidence,
-                candidate[2].word_count,
-            ),
-        )
+        prepared = self.region_ocr.prepare(cropped, region, log)
+        reading = self.region_ocr.extract(prepared, region, log)
+        method = reading.prepared.label
+        processed, result = reading.prepared.image, reading.result
         log(
             "SUCCESS",
             f"Best OCR variant: '{method}' "

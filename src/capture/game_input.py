@@ -54,6 +54,13 @@ class GameInput:
     _CLICK_SETTLE_SECONDS = 0.05
     _KEYEVENTF_EXTENDEDKEY = 0x0001
     _KEYEVENTF_KEYUP = 0x0002
+    _KEYEVENTF_SCANCODE = 0x0008
+    _KEY_SCAN_CODES = {
+        0x25: 0x4B, 0x26: 0x48, 0x27: 0x4D, 0x28: 0x50,
+        **{ord(str(number)): number + 1 for number in range(1, 7)},
+        0x46: 0x21,  # F: cast the fishing rod.
+        0x20: 0x39,  # Space: fishing hook.
+    }
 
     def is_game_foreground(self, window_handle: int) -> bool:
         if not hasattr(ctypes, "WinDLL"):
@@ -143,6 +150,12 @@ class GameInput:
         event.value.ki.dwFlags = (
             self._KEYEVENTF_EXTENDEDKEY if extended else 0
         )
+        if virtual_key in self._KEY_SCAN_CODES:
+            # Game controls read physical keys. VK-only events reach Raw Input
+            # with scan code zero, including battle numbers and fishing keys.
+            event.value.ki.wVk = 0
+            event.value.ki.wScan = self._KEY_SCAN_CODES[virtual_key]
+            event.value.ki.dwFlags |= self._KEYEVENTF_SCANCODE
         if key_up:
             event.value.ki.dwFlags |= self._KEYEVENTF_KEYUP
         error = 0

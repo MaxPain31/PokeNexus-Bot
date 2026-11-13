@@ -258,6 +258,9 @@ QLabel#auto_fishing_fallback_description {
 QSpinBox#auto_catching_hp_spin,
 QSpinBox#auto_fishing_reaction_lead_spin,
 QSpinBox#auto_fishing_space_hold_spin,
+QSpinBox#ev_training_spin,
+QComboBox#auto_battle_mode_selection,
+QComboBox#ev_training_category_filter,
 QComboBox#auto_catching_item_selection {
     color: #F9FAFB;
     background-color: rgba(15, 23, 42, 235);
@@ -268,11 +271,56 @@ QComboBox#auto_catching_item_selection {
     min-height: 20px;
 }
 
-QComboBox#auto_catching_item_selection QAbstractItemView {
+QComboBox#auto_catching_item_selection QAbstractItemView,
+QComboBox#auto_battle_mode_selection QAbstractItemView,
+QComboBox#ev_training_category_filter QAbstractItemView {
     color: #F9FAFB;
     background-color: rgba(17, 24, 39, 250);
     border: 1px solid rgba(91, 124, 161, 110);
     selection-background-color: #28566A;
+}
+
+QSpinBox#ev_training_spin {
+    min-width: 24px;
+    padding: 6px 24px 6px 6px;
+}
+
+QComboBox#auto_battle_mode_selection,
+QComboBox#ev_training_category_filter,
+QSpinBox#ev_training_spin {
+    background-color: rgba(15, 23, 42, {{BACKGROUND_ALPHA:235}});
+}
+
+QLabel#ev_training_column_header {
+    color: #A6B7CD;
+    background: transparent;
+    font-size: 11px;
+}
+
+QLabel#ev_training_remaining,
+QLabel#ev_training_status {
+    color: #7DD3FC;
+    background: transparent;
+    font-size: 12px;
+}
+
+QFrame#ev_training_number_popup {
+    background: transparent;
+    border: none;
+}
+
+QFrame#ev_training_number_panel {
+    color: #F9FAFB;
+    background-color: rgba(17, 24, 39, {{BACKGROUND_ALPHA:250}});
+    border: 1px solid rgba(91, 124, 161, 145);
+    border-radius: 9px;
+}
+
+QLabel#ev_training_number_title {
+    color: #F9FAFB;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 600;
 }
 
 QDoubleSpinBox {
@@ -287,7 +335,7 @@ QDoubleSpinBox {
 
 QLineEdit#desired_pokemon_input {
     color: #F9FAFB;
-    background-color: rgba(15, 23, 42, 235);
+    background-color: rgba(15, 23, 42, {{BACKGROUND_ALPHA:235}});
     border: 1px solid rgba(91, 124, 161, 110);
     border-radius: 7px;
     padding: 6px 10px;
@@ -299,8 +347,13 @@ QLineEdit#desired_pokemon_input:focus {
 }
 
 QFrame#desired_pokemon_popup {
+    background: transparent;
+    border: none;
+}
+
+QFrame#desired_pokemon_popup_panel {
     color: #F9FAFB;
-    background-color: rgba(17, 24, 39, 250);
+    background-color: rgba(17, 24, 39, {{BACKGROUND_ALPHA:250}});
     border: 1px solid rgba(91, 124, 161, 145);
     border-radius: 11px;
 }
@@ -320,7 +373,7 @@ QLabel#desired_pokemon_selection_count {
 
 QLineEdit#desired_pokemon_search {
     color: #F9FAFB;
-    background-color: rgba(15, 23, 42, 230);
+    background-color: rgba(15, 23, 42, {{BACKGROUND_ALPHA:230}});
     border: 1px solid rgba(91, 124, 161, 110);
     border-radius: 7px;
     padding: 7px 10px;
@@ -328,7 +381,7 @@ QLineEdit#desired_pokemon_search {
 
 QComboBox#desired_pokemon_rarity_filter {
     color: #F9FAFB;
-    background-color: rgba(15, 23, 42, 230);
+    background-color: rgba(15, 23, 42, {{BACKGROUND_ALPHA:230}});
     border: 1px solid rgba(91, 124, 161, 110);
     border-radius: 7px;
     padding: 6px 10px;
@@ -336,7 +389,7 @@ QComboBox#desired_pokemon_rarity_filter {
 
 QComboBox#desired_pokemon_rarity_filter QAbstractItemView {
     color: #F9FAFB;
-    background-color: rgba(17, 24, 39, 250);
+    background-color: rgba(17, 24, 39, {{BACKGROUND_ALPHA:250}});
     border: 1px solid rgba(91, 124, 161, 110);
     selection-background-color: #28566A;
 }
@@ -350,7 +403,7 @@ QCheckBox#desired_pokemon_select_all {
 
 QListWidget#desired_pokemon_list {
     color: #E5E7EB;
-    background-color: rgba(15, 23, 42, 220);
+    background-color: rgba(15, 23, 42, {{BACKGROUND_ALPHA:220}});
     border: 1px solid rgba(91, 124, 161, 65);
     border-radius: 7px;
     outline: none;
@@ -379,7 +432,8 @@ QLineEdit#ringtone_path {
     font-size: 11px;
 }
 
-QPushButton#ringtone_browse_button {
+QPushButton#ringtone_browse_button,
+QPushButton#ev_training_reset_button {
     color: #F9FAFB;
     background-color: #1B293E;
     border: 1px solid #3B4D67;
@@ -387,7 +441,8 @@ QPushButton#ringtone_browse_button {
     padding: 6px 10px;
 }
 
-QPushButton#ringtone_browse_button:hover {
+QPushButton#ringtone_browse_button:hover,
+QPushButton#ev_training_reset_button:hover {
     background-color: #263952;
     border-color: #66829F;
 }
@@ -445,7 +500,8 @@ QDialogButtonBox#settings_button_box QPushButton#settings_ok_button:hover {
     border-color: #5EEAD4;
 }
 
-QLabel#desired_pokemon_empty_state {
+QLabel#desired_pokemon_empty_state,
+QLabel#desired_pokemon_synchronize_help {
     color: #FCD34D;
     font-size: 11px;
     padding: 4px;
@@ -456,6 +512,10 @@ QLineEdit#ringtone_path:disabled,
 QSpinBox#auto_catching_hp_spin:disabled,
 QSpinBox#auto_fishing_reaction_lead_spin:disabled,
 QSpinBox#auto_fishing_space_hold_spin:disabled,
+QSpinBox#ev_training_spin:disabled,
+QComboBox#auto_battle_mode_selection:disabled,
+QComboBox#ev_training_category_filter:disabled,
+QPushButton#ev_training_reset_button:disabled,
 QComboBox#auto_catching_item_selection:disabled,
 QDoubleSpinBox:disabled {
     color: #8295AE;
@@ -480,6 +540,9 @@ QSpinBox#auto_catching_hp_spin:focus,
 QSpinBox#auto_fishing_reaction_lead_spin:focus,
 QSpinBox#auto_fishing_space_hold_spin:focus,
 QSpinBox#overlay_transparency_spin:focus,
+QSpinBox#ev_training_spin:focus,
+QComboBox#auto_battle_mode_selection:focus,
+QComboBox#ev_training_category_filter:focus,
 QComboBox#auto_catching_item_selection:focus,
 QComboBox#desired_pokemon_rarity_filter:focus,
 QDoubleSpinBox:focus {
@@ -495,16 +558,19 @@ QToolButton#elite_pokemon_advanced_toggle:focus {
 }
 
 QPushButton#ringtone_browse_button:focus,
+QPushButton#ev_training_reset_button:focus,
 QDialogButtonBox#settings_button_box QPushButton:focus {
     border-color: #BAE6FD;
 }
 
 QComboBox::drop-down {
+    background: transparent;
     border: none;
     width: 24px;
 }
 
 QComboBox::down-arrow {
+    background: transparent;
     image: url("{{ASSETS_DIR}}/chevron-down.svg");
     width: 12px;
     height: 12px;

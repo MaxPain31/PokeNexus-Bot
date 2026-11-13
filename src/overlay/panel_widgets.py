@@ -22,13 +22,16 @@ class OverlayIconButton(HoverToolButton):
     _PADDING = 6
     _CAPTION_GAP = 5
 
+    def caption_lines(self) -> tuple[str, ...]:
+        return tuple(self.text().splitlines())
+
     def content_rects(self) -> tuple[QRect, QRect]:
         content = self.rect().adjusted(
             self._PADDING, self._PADDING, -self._PADDING, -self._PADDING
         )
         size = self.iconSize().boundedTo(content.size())
         caption_height = (
-            self.fontMetrics().height()
+            self.fontMetrics().height() * len(self.caption_lines())
             if self.text()
             and self.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextUnderIcon
             else 0
@@ -72,14 +75,19 @@ class OverlayIconButton(HoverToolButton):
                 else QPalette.ColorGroup.Disabled
             )
             painter.setPen(self.palette().color(group, QPalette.ColorRole.ButtonText))
-            caption = self.fontMetrics().elidedText(
-                self.text(), Qt.TextElideMode.ElideRight, caption_rect.width()
-            )
-            painter.drawText(
-                caption_rect,
-                Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextSingleLine,
-                caption,
-            )
+            line_height = self.fontMetrics().height()
+            for index, line in enumerate(self.caption_lines()):
+                caption = self.fontMetrics().elidedText(
+                    line, Qt.TextElideMode.ElideRight, caption_rect.width()
+                )
+                painter.drawText(
+                    QRect(
+                        caption_rect.left(), caption_rect.top() + index * line_height,
+                        caption_rect.width(), line_height,
+                    ),
+                    Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextSingleLine,
+                    caption,
+                )
         painter.end()
 
 

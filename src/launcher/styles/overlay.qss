@@ -186,6 +186,23 @@ QLabel#summary_session_status[running="true"] {
     border-color: rgba(45, 212, 191, 90);
 }
 
+QToolButton#pokemon_summary_collapse_button {
+    background-color: rgba(255, 255, 255, 10);
+    border: 1px solid rgba(91, 124, 161, 65);
+    border-radius: 7px;
+    padding: 0;
+}
+
+QToolButton#pokemon_summary_collapse_button:hover {
+    background-color: rgba(56, 189, 248, 30);
+    border-color: #66829F;
+}
+
+QToolButton#pokemon_summary_collapse_button:pressed {
+    background-color: rgba(56, 189, 248, 45);
+    border-color: #7DD3FC;
+}
+
 QToolButton#battle_log_clear_button,
 QToolButton#region_test_log_clear_button,
 QToolButton#fishing_preview_close_button {
@@ -392,6 +409,48 @@ QFrame#region_overlay_container {
     border-radius: 12px;
 }
 
+QDialog#region_reset_dialog {
+    color: #F9FAFB;
+    background: transparent;
+}
+
+QFrame#region_reset_panel {
+    background-color: rgba(17, 24, 39, {{BACKGROUND_ALPHA:238}});
+    border: 1px solid rgba(251, 113, 133, 145);
+    border-radius: 12px;
+}
+
+QLabel#region_reset_title {
+    color: #FDA4AF;
+    background: transparent;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+QLabel#region_reset_warning {
+    color: #C5D3E5;
+    background: transparent;
+    font-size: 12px;
+}
+
+QDialog#region_reset_dialog QPushButton {
+    color: #F9FAFB;
+    background-color: #1B293E;
+    border: 1px solid #3B4D67;
+    border-radius: 7px;
+    padding: 7px 12px;
+}
+
+QDialog#region_reset_dialog QPushButton:hover {
+    background-color: #263952;
+    border-color: #66829F;
+}
+
+QDialog#region_reset_dialog QPushButton#region_reset_confirm_button {
+    color: #FDA4AF;
+    border-color: #BE5269;
+}
+
 QWidget#region_toolbar_page,
 QWidget#region_feature_page,
 QScrollArea#region_feature_scroll,
@@ -422,6 +481,42 @@ QLabel#region_outline_hint {
     color: #91A6C0;
     background: transparent;
     font-size: 10px;
+}
+
+QLabel#region_placement_hint,
+QLabel#region_placement_status {
+    color: #AFC2D9;
+    background: transparent;
+    font-size: 11px;
+}
+
+QLabel#region_placement_status[error="true"] {
+    color: #FDA4AF;
+}
+
+QFrame#synchronize_card {
+    background-color: rgba(25, 39, 59, {{BACKGROUND_ALPHA:225}});
+    border: 1px solid rgba(91, 124, 161, 65);
+    border-radius: 8px;
+}
+
+QLabel#synchronize_label {
+    color: #E6EDF7;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#synchronize_description {
+    color: #AFC2D9;
+    background: transparent;
+    font-size: 11px;
+}
+
+QLabel#synchronize_status {
+    color: #5EEAD4;
+    background: transparent;
+    font-size: 11px;
 }
 
 QWidget#region_toolbar_page QToolButton {
@@ -512,6 +607,8 @@ QLabel#region_item_geometry {
 }
 
 QPushButton#region_add_button,
+QPushButton#region_auto_place_button,
+QPushButton#region_reset_button,
 QPushButton#region_edit_button,
 QPushButton#region_test_button {
     color: #C5D3E5;
@@ -529,7 +626,8 @@ QPushButton#region_test_button:hover {
     border-color: #66829F;
 }
 
-QPushButton#region_add_button {
+QPushButton#region_add_button,
+QPushButton#region_auto_place_button {
     color: #5EEAD4;
     background-color: rgba(45, 212, 191, 22);
     border-color: rgba(45, 212, 191, 95);
@@ -537,15 +635,29 @@ QPushButton#region_add_button {
     font-size: 12px;
 }
 
-QPushButton#region_add_button:hover {
+QPushButton#region_add_button:hover,
+QPushButton#region_auto_place_button:hover {
     background-color: rgba(45, 212, 191, 40);
     border-color: #5EEAD4;
 }
 
-QPushButton#region_add_button:disabled {
+QPushButton#region_add_button:disabled,
+QPushButton#region_auto_place_button:disabled,
+QPushButton#region_reset_button:disabled {
     color: #8295AE;
     background-color: rgba(91, 124, 161, 12);
     border-color: rgba(91, 124, 161, 45);
+}
+
+QPushButton#region_reset_button {
+    color: #FDA4AF;
+    background-color: rgba(251, 113, 133, 14);
+    border-color: rgba(251, 113, 133, 70);
+}
+
+QPushButton#region_reset_button:hover {
+    background-color: rgba(251, 113, 133, 30);
+    border-color: #BE5269;
 }
 
 QToolButton#region_back_button,

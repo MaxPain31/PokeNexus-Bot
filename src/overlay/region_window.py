@@ -1,8 +1,7 @@
-import re
-
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -20,13 +19,21 @@ from PySide6.QtWidgets import (
 )
 
 from launcher.styles.style_loader import load_stylesheet
-from models.region_config import REGION_FEATURES, REGION_ROLE_LABELS, SavedRegion
+from models.region_config import (
+    AUTO_BATTLE_FEATURES,
+    REGION_FEATURES,
+    REGION_ROLE_LABELS,
+    SavedRegion,
+    canonical_region_role,
+    merge_missing_battle_regions,
+)
 from overlay.appearance import apply_overlay_stylesheet
 from overlay.panel_geometry import position_panel
 from overlay.panel_widgets import ElidedPanelLabel, OverlayIconButton, OverlayPanelHeader
 from overlay.region_edit_dialog import RegionEditDialog
 from overlay.region_marker import RegionMarkerWindow
 from overlay.region_name_dialog import RegionNameDialog
+from overlay.region_reset_dialog import RegionResetDialog
 from overlay.window_drag import OverlayWindowDrag
 from utils.runtime_paths import application_path
 from utils.svg_loader import load_svg_icon
@@ -62,6 +69,11 @@ class _RegionFeatureButton(OverlayIconButton):
         self.count_label.setFixedSize(28, 16)
         self.count_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
+    def caption_lines(self) -> tuple[str, ...]:
+        if self.text() == "Special Pokemon Message":
+            return ("Special Pokemon", "Message")
+        return super().caption_lines()
+
     def set_role_count(self, configured: int, total: int) -> None:
         self.count_label.setText(f"{configured}/{total}")
         description = f"{configured} of {total} roles configured"
@@ -85,6 +97,8 @@ class RegionWindow(QWidget):
     visibility_changed = Signal(bool)
     closed = Signal()
     add_region_requested = Signal(str)
+    auto_place_requested = Signal()
+    battle_regions_reset = Signal()
     test_region_requested = Signal(object)
     regions_changed = Signal(object)
     naming_dialog_changed = Signal(int)
@@ -137,6 +151,7 @@ class RegionWindow(QWidget):
         self._markers: list[RegionMarkerWindow] = []
         self._listed_feature: str | None = None
         self._hidden_for_dialog = False
+        self._placement_busy = False
         self.header = OverlayPanelHeader(
             "Region Overlay", "Select a feature to configure",
             "select_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg", self.glass_container,
@@ -168,6 +183,14 @@ class RegionWindow(QWidget):
         self.stack.addWidget(self.toolbar_page)
         self.stack.addWidget(self.feature_page)
         self.stack.setCurrentWidget(self.toolbar_page)
+        self.placement_status_label = QLabel(self.glass_container)
+        self.placement_status_label.setObjectName("region_placement_status")
+        self.placement_status_label.setWordWrap(True)
+        self.placement_status_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.placement_status_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.placement_status_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.placement_status_label.hide()
+        container_layout.addWidget(self.placement_status_label)
 
         self._drag_controller = OverlayWindowDrag(
             self, (self.glass_container, self.header)
@@ -199,6 +222,14 @@ class RegionWindow(QWidget):
         layout.setSpacing(10)
         layout.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
 
+        self.placement_hint = QLabel(
+            "Choose a feature and Add Region to select manually, or enter a battle "
+            "and Auto Place. Edit or Test any saved region.", page,
+        )
+        self.placement_hint.setObjectName("region_placement_hint")
+        self.placement_hint.setWordWrap(True)
+        self.placement_hint.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        layout.addWidget(self.placement_hint)
         self.toolbar_scroll_area = QScrollArea(page)
         self.toolbar_scroll_area.setObjectName("region_feature_scroll")
         self.toolbar_scroll_area.setFrameShape(QFrame.Shape.NoFrame)
@@ -244,6 +275,26 @@ class RegionWindow(QWidget):
         self.toolbar_scroll_area.setWidget(content)
         self.toolbar_scroll_area.viewport().installEventFilter(self)
         layout.addWidget(self.toolbar_scroll_area, 1)
+        placement_actions = QHBoxLayout()
+        placement_actions.setSpacing(8)
+        self.auto_place_button = QPushButton("Auto Place", page)
+        self.auto_place_button.setObjectName("region_auto_place_button")
+        self.auto_place_button.setToolTip(
+            "Detect a visible battle panel and fill missing battle regions. "
+            "Existing positions and sizes are kept; no game keys or clicks are sent."
+        )
+        self.auto_place_button.clicked.connect(self._request_auto_place)
+        self.reset_regions_button = QPushButton("Reset", page)
+        self.reset_regions_button.setObjectName("region_reset_button")
+        self.reset_regions_button.setAccessibleName("Reset battle regions")
+        self.reset_regions_button.setToolTip("Reset battle regions and adjustments, after a confirmation warning.")
+        self.reset_regions_button.clicked.connect(self._request_reset_battle_regions)
+        for button in (self.auto_place_button, self.reset_regions_button):
+            button.setFixedHeight(36)
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            placement_actions.addWidget(button)
+        layout.addLayout(placement_actions)
         self.configuration_label = QLabel(page)
         self.configuration_label.setObjectName("region_configuration_status")
         self.configuration_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -285,6 +336,33 @@ class RegionWindow(QWidget):
         self.region_hint.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         layout.addWidget(self.region_hint)
         self._default_region_hint = self.region_hint.text()
+
+        self.synchronize_card = QFrame(page)
+        self.synchronize_card.setObjectName("synchronize_card")
+        self.synchronize_card.setMinimumSize(0, 0)
+        self.synchronize_card.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        synchronize_layout = QVBoxLayout(self.synchronize_card)
+        synchronize_layout.setContentsMargins(10, 8, 10, 8)
+        synchronize_layout.setSpacing(6)
+        synchronize_layout.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
+        self.synchronize_label = QLabel("Green S / Nature Match detection", self.synchronize_card)
+        self.synchronize_label.setObjectName("synchronize_label")
+        synchronize_layout.addWidget(self.synchronize_label)
+        self.synchronize_description = QLabel(
+            "The green S means the wild Pokemon's Nature matches the game's selected Pokemon's Nature, "
+            "not Shiny. Choose targets in Settings > Encounters: open the Desired or Elite "
+            "Pokemon picker and check S only beside each species. No Pokemon switching.",
+            self.synchronize_card,
+        )
+        self.synchronize_description.setObjectName("synchronize_description")
+        self.synchronize_description.setWordWrap(True)
+        self.synchronize_description.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        synchronize_layout.addWidget(self.synchronize_description)
+        self.synchronize_status = ElidedPanelLabel("Waiting for live Nature Match detection", self.synchronize_card)
+        self.synchronize_status.setObjectName("synchronize_status")
+        synchronize_layout.addWidget(self.synchronize_status)
+        layout.addWidget(self.synchronize_card)
+        self.synchronize_card.hide()
 
         self.region_list = QListWidget()
         self.region_list.setObjectName("region_list")
@@ -384,13 +462,105 @@ class RegionWindow(QWidget):
             )
         else:
             self.setFixedSize(self._preferred_size)
-        self.region_hint.setVisible(self.height() >= 300)
-        self.outline_hint.setVisible(self.height() >= 380)
+        self._update_compact_layout()
         self.layout().activate()
+
+    def hasHeightForWidth(self) -> bool:
+        # This top-level overlay already has a size bounded to the game. On
+        # Windows, advertising the child labels' wrapping can grow the native
+        # window past that fixed height instead of shrinking the scroll area.
+        return False
+
+    def _update_compact_layout(self) -> None:
+        height = self.height()
+        self.region_hint.setVisible(height >= 300)
+        self.outline_hint.setVisible(height >= 380)
+        if self.current_feature == "synchronize":
+            self.region_hint.setVisible(height >= 480)
+            self.outline_hint.setVisible(height >= 530)
+        self.synchronize_label.setVisible(height >= 300)
+        self.synchronize_description.setVisible(height >= 430)
+        self.synchronize_status.setVisible(height >= 340)
+        self.placement_hint.setVisible(height >= 380)
+        self.configuration_label.setVisible(height >= 280)
+        lines = 3 if height >= 380 else 2 if height >= 280 else 1
+        self.placement_status_label.setMaximumHeight(
+            lines * self.placement_status_label.fontMetrics().height(),
+        )
 
     def set_regions(self, regions: tuple[SavedRegion, ...]) -> None:
         self.regions = list(regions)
         self._refresh_feature_page()
+
+    def update_synchronize_state(self, state: dict[str, object]) -> None:
+        if state.get("onBattleMode") is not True:
+            text = "Waiting for live Nature Match detection"
+        elif state.get("wildPokemonNatureMatch") is True:
+            text = "Green S detected — Nature match, not Shiny"
+        elif state.get("wildPokemonNatureMatch") is False:
+            text = "No green S detected in the current battle"
+        else:
+            text = "Nature Match detection is unavailable"
+        self.synchronize_status.setText(text)
+        self.synchronize_status.setAccessibleName(text)
+
+    def set_placement_busy(self, busy: bool) -> None:
+        self._placement_busy = busy
+        self.auto_place_button.setEnabled(not busy)
+        self.auto_place_button.setText("Detecting battle..." if busy else "Auto Place")
+        self.region_list.setEnabled(not busy)
+        for button in self.buttons.values():
+            button.setEnabled(not busy)
+        self._refresh_feature_page()
+
+    def set_placement_status(self, text: str, *, error: bool = False) -> None:
+        self.placement_status_label.setText(text)
+        # Long capture/OCR errors must not push Auto Place and Reset out of a
+        # compact panel. Keep the complete message available when hovering.
+        self.placement_status_label.setToolTip(text)
+        self.placement_status_label.setAccessibleName(text)
+        self.placement_status_label.setVisible(bool(text))
+        self.placement_status_label.setProperty("error", error)
+        self.placement_status_label.style().unpolish(self.placement_status_label)
+        self.placement_status_label.style().polish(self.placement_status_label)
+
+    def apply_automatic_regions(self, detected: tuple[SavedRegion, ...]) -> None:
+        before = tuple(self.regions)
+        merged = merge_missing_battle_regions(before, detected)
+        added = len(merged) - len(before)
+        if added:
+            self.regions = list(merged)
+            self._refresh_feature_page()
+            self.regions_changed.emit(merged)
+            self.set_placement_status(
+                f"Placed {added} missing battle region(s). Saved adjustments were kept. "
+                "Select a feature, then Edit or Test."
+            )
+        else:
+            self.set_placement_status(
+                "Battle panel found. All battle regions are already placed; your adjustments "
+                "were kept. Use Reset if you want to re-place them."
+            )
+
+    def _request_auto_place(self) -> None:
+        if not self._placement_busy:
+            self.auto_place_requested.emit()
+
+    def _request_reset_battle_regions(self) -> None:
+        battle_regions = [region for region in self.regions if region.feature in AUTO_BATTLE_FEATURES]
+        if self._placement_busy or not battle_regions:
+            return
+        dialog = RegionResetDialog(len(battle_regions), self.parentWidget())
+        self._center_dialog(dialog)
+        if not self._exec_dialog(dialog):
+            return
+        # Pause running automation before its configured battle evidence is
+        # removed. Other regions and all non-region preferences remain intact.
+        self.battle_regions_reset.emit()
+        self.regions = [region for region in self.regions if region.feature not in AUTO_BATTLE_FEATURES]
+        self._refresh_feature_page()
+        self.regions_changed.emit(tuple(self.regions))
+        self.set_placement_status("Battle regions reset. Add regions manually, or enter a battle and choose Auto Place.")
 
     def prompt_region_name(self, feature: str, geometry: QRect) -> None:
         if feature not in dict(REGION_FEATURES):
@@ -503,7 +673,7 @@ class RegionWindow(QWidget):
 
     def _exec_dialog(
         self,
-        dialog: RegionNameDialog | RegionEditDialog,
+        dialog: QDialog,
         *,
         hide_region_window: bool = True,
     ) -> bool:
@@ -561,22 +731,57 @@ class RegionWindow(QWidget):
         self.raise_()
 
     def _request_add_region(self) -> None:
-        if self.current_feature is not None and self._available_role_names(self.current_feature):
+        if (
+            not self._placement_busy and self.current_feature is not None
+            and self._available_role_names(self.current_feature)
+        ):
             self.add_region_requested.emit(self.current_feature)
 
     def _set_panel_size(self, toolbar: bool) -> None:
-        self._preferred_size = QSize(368, 420 if toolbar else 456)
+        # One additional row keeps the Synchronize tile visible on roomy game
+        # windows. Compact windows still use the bounded, scrolling grid.
+        toolbar_height = 212 + ((len(REGION_FEATURES) + 2) // 3) * 78
+        feature_height = 568 if self.current_feature == "synchronize" else 456
+        self._preferred_size = QSize(368, toolbar_height if toolbar else feature_height)
         self._position_for_game()
 
     def _reset_region_hint(self) -> None:
-        self.region_hint.setText(
-            "Select the full fishing gauge, including the green zone and both "
-            "markers. Preview shows live detection."
-            if self.current_feature == "fishing"
-            else self._default_region_hint
+        hints = {
+            "pokemon-name": (
+                "Select the active and wild names with Add Region, or use Auto Place. "
+                "Keep the full wild name and all markers when adjusting. "
+                "Green S is a Nature match; [S]/Shiny and [E]/Elite are separate traits."
+            ),
+            "pokemon-team": (
+                "Select individual team buttons with Add Region, or let Auto Place "
+                "create all six. OCR ignores each button's left Pokemon icon. "
+                "Use Edit or Test to check the name area."
+            ),
+            "fishing": (
+                "Select the full fishing gauge, including the green zone and both "
+                "markers. Preview shows live detection."
+            ),
+            "synchronize": (
+                "Optional: Add Region around only the green S for Nature Match detection. "
+                "The full Wild Pokemon name also detects it. Auto Place and battle Reset leave Synchronize unchanged."
+            ),
+            "special-pokemon-message": (
+                'Message Box: select "You have encountered a special pokemon!" '
+                'or the "Special Encounter!" title. Close Button: select the popup\'s '
+                "top-right X. Auto Close Special Pokemon Message is in Settings "
+                "under Encounters."
+            ),
+        }
+        default_hint = (
+            "Add Region to select a capture area manually, or use Auto Place on the "
+            "main region page. Use Edit for exact position and size, drag an outline "
+            "to adjust, or Test to check OCR."
+            if self.current_feature in AUTO_BATTLE_FEATURES else self._default_region_hint
         )
+        self.region_hint.setText(hints.get(self.current_feature, default_hint))
 
     def _refresh_feature_page(self) -> None:
+        self.synchronize_card.setVisible(self.current_feature == "synchronize")
         configured = 0
         total = 0
         for feature, button in self.buttons.items():
@@ -586,6 +791,9 @@ class RegionWindow(QWidget):
             configured += used
             total += role_count
         self.configuration_label.setText(f"{configured} of {total} roles configured")
+        self.reset_regions_button.setEnabled(
+            not self._placement_busy and any(region.feature in AUTO_BATTLE_FEATURES for region in self.regions)
+        )
         scroll_value = (
             self.region_list.verticalScrollBar().value()
             if self._listed_feature == self.current_feature else 0
@@ -594,20 +802,32 @@ class RegionWindow(QWidget):
         self.region_list.clear()
         if self.current_feature is None:
             self.feature_title.setText("Region Overlay")
-            self.header.subtitle.setText("Select a feature to configure")
+            self.header.subtitle.setText("Manual selection and Auto Place")
             return
         self._reset_region_hint()
         available_roles = self._available_role_names(self.current_feature)
         role_count = len(REGION_ROLE_LABELS[self.current_feature])
         self.header.subtitle.setText(
-            f"{role_count - len(available_roles)} of {role_count} roles configured"
+            f"{role_count - len(available_roles)} of {role_count} optional regions configured"
+            if self.current_feature == "synchronize"
+            else f"{role_count - len(available_roles)} of {role_count} roles configured"
         )
-        self.add_region_button.setEnabled(bool(available_roles))
+        self.add_region_button.setEnabled(bool(available_roles) and not self._placement_busy)
         self.add_region_button.setText("+  Add Region" if available_roles else "All roles configured")
         self.add_region_button.setToolTip(
-            "Available roles: " + ", ".join(available_roles)
+            "Select a capture area manually. Available roles: " + ", ".join(available_roles)
             if available_roles else "Edit or remove an existing region to change its capture area."
         )
+        self.empty_description.setText(
+            "Click Add Region to drag a capture area, or go back and Auto Place the battle regions."
+            if self.current_feature in AUTO_BATTLE_FEATURES
+            else "Click Add Region, then drag over the part of the game you want to capture."
+        )
+        if self.current_feature == "synchronize":
+            self.empty_title.setText("Nature Match region is optional")
+            self.empty_description.setText("Add Region around the green S, or keep using your full Wild Pokemon name region.")
+        else:
+            self.empty_title.setText("No regions yet")
         for region in self.regions:
             if region.feature != self.current_feature:
                 continue
@@ -689,7 +909,7 @@ class RegionWindow(QWidget):
         self.test_region_requested.emit(region)
 
     def _sync_markers(self) -> None:
-        if not self.isVisible() or self.stack.currentWidget() is not self.feature_page:
+        if self._placement_busy or not self.isVisible() or self.stack.currentWidget() is not self.feature_page:
             self._hide_markers()
             return
         desired = [
@@ -765,55 +985,18 @@ class RegionWindow(QWidget):
 
     @staticmethod
     def _canonical_role_name(region: SavedRegion) -> str | None:
-        label = region.label.casefold()
-        roles = REGION_ROLE_LABELS[region.feature]
-        exact_match = next(
-            (role for role in roles if role.casefold() == label),
-            None,
-        )
-        if exact_match is not None:
-            return exact_match
-
-        if len(roles) == 1:
-            return roles[0]
-
-        if region.feature == "health":
-            if "enemy" in label or "opponent" in label:
-                return "Enemy Health"
-            if any(token in label for token in ("ally", "player", "your")):
-                return "Ally Health"
-            if re.search(r"(?:pokemon|health)\s*1\b", label):
-                return "Ally Health"
-            if re.search(r"(?:pokemon|health)\s*2\b", label):
-                return "Enemy Health"
-        elif region.feature == "pokemon-name":
-            if "wild" in label:
-                return "Wild Pokemon"
-            if any(token in label for token in ("your", "current", "player", "ally")):
-                return "Your Pokemon"
-            if re.search(r"pokemon name\s*1\b", label):
-                return "Your Pokemon"
-            if re.search(r"pokemon name\s*2\b", label):
-                return "Wild Pokemon"
-        elif region.feature == "pokemon-team":
-            match = re.search(r"(?:pokemon team|team)(?: slot)?\s*(\d+)\b", label)
-            if match:
-                slot = int(match.group(1))
-                role = f"Pokemon Team Slot {slot}"
-                return role if role in roles else None
-        elif region.feature == "moves":
-            match = re.search(r"moves?(?: slot)?\s*(\d+)\b", label)
-            if match:
-                slot = int(match.group(1))
-                role = f"Move Slot {slot}"
-                return role if role in roles else None
-        return None
+        return canonical_region_role(region)
 
     def hideEvent(self, event) -> None:
         super().hideEvent(event)
         self.hover_label.hide()
         self._hide_markers()
         self.visibility_changed.emit(False)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "placement_status_label"):
+            self._update_compact_layout()
 
     def closeEvent(self, event) -> None:
         super().closeEvent(event)

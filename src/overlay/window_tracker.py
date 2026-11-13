@@ -2,6 +2,7 @@ import ctypes
 from ctypes import wintypes
 
 from PySide6.QtCore import QObject, QRect, QTimer, Signal
+from PySide6.QtWidgets import QWidget
 
 from utils.screen_coordinates import physical_to_logical_rect
 
@@ -137,6 +138,42 @@ class GameWindowTracker(QObject):
     def set_fishing_preview_window(self, window_id: int | None) -> None:
         self._fishing_preview_window_id = window_id
 
+    def _is_overlay_foreground(self, window_id: int | None) -> bool:
+        """Include owned selector popups, not every window in the bot process."""
+        if self._user32 is None:
+            return False
+        overlay_windows = {
+            self._auxiliary_window_id,
+            self._overlay_window_id,
+            self._region_window_id,
+            self._region_selection_window_id,
+            self._region_dialog_window_id,
+            *self._region_marker_window_ids,
+            self._battle_log_window_id,
+            self._encounter_summary_window_id,
+            self._region_test_log_window_id,
+            self._fishing_preview_window_id,
+        }
+        overlay_windows.discard(None)
+        overlay_windows.discard(0)
+        visited: set[int] = set()
+        window_id = int(window_id or 0)
+        while window_id > 0 and window_id not in visited:
+            if window_id in overlay_windows:
+                return True
+            widget = QWidget.find(window_id)
+            while widget is not None:
+                # Windows can leave Qt.Popup's native owner unset. The Qt
+                # parent chain still links both selector menus to Settings.
+                if int(widget.effectiveWinId() or 0) in overlay_windows:
+                    return True
+                widget = widget.parentWidget()
+            visited.add(window_id)
+            # Qt.Popup is a separate foreground HWND. Its owner can be the
+            # Settings panel or another popup (the selector's rarity menu).
+            window_id = int(self._user32.GetWindow(window_id, self._GW_OWNER) or 0)
+        return False
+
     def _refresh(self) -> None:
         if self._user32 is None or self._process_id is None:
             self.window_updated.emit(0, QRect(), False)
@@ -213,18 +250,7 @@ class GameWindowTracker(QObject):
                 self._user32.GetWindowThreadProcessId(
                     foreground, ctypes.byref(foreground_process_id)
                 )
-            is_overlay_foreground = bool(foreground) and int(foreground) in (
-                self._auxiliary_window_id,
-                self._overlay_window_id,
-                self._region_window_id,
-                self._region_selection_window_id,
-                self._region_dialog_window_id,
-                *self._region_marker_window_ids,
-                self._battle_log_window_id,
-                self._encounter_summary_window_id,
-                self._region_test_log_window_id,
-                self._fishing_preview_window_id,
-            )
+            is_overlay_foreground = self._is_overlay_foreground(foreground)
             is_game_foreground = (
                 (
                     foreground_process_id.value == process_id

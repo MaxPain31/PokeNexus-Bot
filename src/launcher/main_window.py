@@ -53,6 +53,7 @@ class MainWindow(QWidget):
         self._launch_transition: str | None = None
         self._hidden_to_tray = False
         self._restore_when_process_exits = False
+        self._legacy_synchronize_pokemon = ""
         self._setup_style()
         self._setup_ui()
         self._setup_controllers()
@@ -321,11 +322,7 @@ class MainWindow(QWidget):
 
     def _on_settings_clicked(self) -> None:
         settings = self.overlay_window.settings_window
-        if settings.isVisible():
-            settings.raise_()
-            settings.activateWindow()
-        else:
-            settings.show_for_launcher(QRect(self.frameGeometry()))
+        settings.show_for_launcher(QRect(self.frameGeometry()))
 
     def _setup_controllers(self) -> None:
         self.process_controller = ProcessController(self)
@@ -340,6 +337,9 @@ class MainWindow(QWidget):
         self.executable_picker.executable_selected.connect(self._on_executable_selected)
         self.overlay_window.settings_window.auto_battle_toggle.toggled.connect(
             self._on_settings_toggled
+        )
+        self.overlay_window.settings_window.auto_battle_configuration_changed.connect(
+            self._save_settings
         )
         self.overlay_window.settings_window.auto_switch_fainted_pokemon_toggle.toggled.connect(
             self._on_settings_toggled
@@ -422,6 +422,9 @@ class MainWindow(QWidget):
         self.overlay_window.settings_window.use_mouse_clicking_toggle.toggled.connect(
             self._on_settings_toggled
         )
+        self.overlay_window.settings_window.auto_close_special_pokemon_message_toggle.toggled.connect(
+            self._on_settings_toggled
+        )
         self.start_button.clicked.connect(self._on_start_clicked)
         self.settings_button.clicked.connect(self._on_settings_clicked)
         self.log_viewer.visibility_changed.connect(self._on_log_visibility_changed)
@@ -468,6 +471,9 @@ class MainWindow(QWidget):
             )
             return
 
+        # The former single-choice setting is not a wild-encounter target.
+        # Preserve it without importing it into either user's target list.
+        self._legacy_synchronize_pokemon = settings.synchronize_pokemon
         self.overlay_window.settings_window.auto_battle_toggle.setChecked(
             settings.auto_battle
         )
@@ -498,9 +504,21 @@ class MainWindow(QWidget):
         self.overlay_window.settings_window.auto_catching_item_selection.setCurrentText(
             settings.auto_catching_item
         )
+        # Restore Desired first so contradictory saved battle targets cannot
+        # displace a protected species. Each picker then enforces the exclusions.
+        battle_settings = self.overlay_window.settings_window
+        battle_settings.specific_pokemon_input.setText("")
+        battle_settings.ev_training_pokemon_input.setText("")
         self.overlay_window.settings_window.desired_pokemon_input.setText(
             settings.desired_pokemon
         )
+        battle_settings.specific_pokemon_input.setText(settings.auto_battle_specific_pokemon)
+        battle_settings.ev_training_pokemon_input.setText(settings.ev_training_pokemon)
+        battle_settings.ev_training_category_filter.setCurrentIndex(
+            battle_settings.ev_training_category_filter.findData(settings.ev_training_category)
+        )
+        battle_settings.set_ev_training_progress(settings.ev_training_current, settings.ev_training_targets)
+        battle_settings.ev_training_pokemon_input.search_input.setText(settings.ev_training_search)
         self.overlay_window.settings_window.elite_pokemon_input.setText(
             settings.elite_pokemon_names
         )
@@ -534,6 +552,11 @@ class MainWindow(QWidget):
             settings.auto_catching_elite_filter
             and settings.stop_auto_battle_for_elite
         )
+        # Apply Elite-only after the encounter rules so it also resolves an
+        # incompatible saved Elite stop/catch configuration.
+        battle_settings.auto_battle_mode_selection.setCurrentText(settings.auto_battle_mode)
+        battle_settings.auto_battle_elite_only_toggle.setChecked(settings.auto_battle_elite_only)
+        battle_settings._on_auto_battle_mode_changed()
         self.overlay_window.settings_window.desired_pokemon_sound_toggle.setChecked(
             settings.desired_pokemon_sound_enabled
         )
@@ -584,6 +607,9 @@ class MainWindow(QWidget):
         self.overlay_window.settings_window.use_mouse_clicking_toggle.setChecked(
             settings.use_mouse_clicking
         )
+        self.overlay_window.settings_window.auto_close_special_pokemon_message_toggle.setChecked(
+            settings.auto_close_special_pokemon_message
+        )
         self.overlay_window.set_test_region_logs_visible(
             settings.show_test_region_logs
         )
@@ -612,6 +638,14 @@ class MainWindow(QWidget):
                 else ""
             ),
             auto_battle=settings_window.auto_battle_toggle.isChecked(),
+            auto_battle_mode=settings_window.auto_battle_mode_selection.currentText(),
+            auto_battle_specific_pokemon=settings_window.specific_pokemon_input.text(),
+            auto_battle_elite_only=settings_window.auto_battle_elite_only_toggle.isChecked(),
+            ev_training_pokemon=settings_window.ev_training_pokemon_input.text(),
+            ev_training_category=settings_window.ev_training_category_filter.currentData(),
+            ev_training_current=settings_window.ev_training_progress().current,
+            ev_training_targets=settings_window.ev_training_progress().targets,
+            ev_training_search=settings_window.ev_training_pokemon_input.search_input.text().strip(),
             auto_switch_fainted_pokemon=(
                 settings_window.auto_switch_fainted_pokemon_toggle.isChecked()
             ),
@@ -708,6 +742,10 @@ class MainWindow(QWidget):
                 settings_window.overlay_background_transparency_spin.value()
             ),
             use_mouse_clicking=settings_window.use_mouse_clicking_toggle.isChecked(),
+            auto_close_special_pokemon_message=(
+                settings_window.auto_close_special_pokemon_message_toggle.isChecked()
+            ),
+            synchronize_pokemon=self._legacy_synchronize_pokemon,
             regions=tuple(self.overlay_window.region_window.regions),
         )
         try:
@@ -853,6 +891,7 @@ class MainWindow(QWidget):
         QMessageBox.warning(self, title, message)
 
     def _quit_application(self) -> None:
+        self.overlay_window.cancel_battle_region_placement(wait=True)
         self.overlay_window.stop_realtime_region_capture(
             wait_timeout_ms=5000
         )

@@ -1,6 +1,6 @@
 from html import escape
 
-from PySide6.QtCore import QElapsedTimer, QRect, QSize, Qt, QTimer
+from PySide6.QtCore import QElapsedTimer, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
@@ -9,12 +9,18 @@ from core.pokemon_rarity import RARITIES
 from launcher.styles.style_loader import background_alpha
 from overlay.appearance import apply_overlay_stylesheet, background_transparency
 from overlay.panel_geometry import position_panel
-from overlay.panel_widgets import OverlayPanelHeader
+from overlay.panel_widgets import OverlayIconButton, OverlayPanelHeader
 from overlay.window_drag import OverlayWindowDrag
+from utils.runtime_paths import application_path
+from utils.svg_loader import load_svg_icon
 
 
 class PokemonEncounterSummaryWindow(QWidget):
     """Show the current wild encounter, daily count, and app session duration."""
+
+    preferred_size_changed = Signal()
+    _EXPANDED_HEIGHT = 328
+    _COLLAPSED_HEIGHT = 204
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(
@@ -28,7 +34,10 @@ class PokemonEncounterSummaryWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setWindowTitle("Pokémon Summary")
-        self._preferred_size = QSize(360, 328)
+        self._preferred_size = QSize(360, self._EXPANDED_HEIGHT)
+        self._last_game_geometry: QRect | None = None
+        self._last_occupied: tuple[QRect, ...] = ()
+        self._last_size_limit: QSize | None = None
         self.setFixedSize(self._preferred_size)
         apply_overlay_stylesheet(self)
 
@@ -50,6 +59,17 @@ class PokemonEncounterSummaryWindow(QWidget):
         self.session_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.session_status_label.setFixedSize(54, 24)
         self.header.add_action(self.session_status_label)
+        self.collapse_button = OverlayIconButton(self.header)
+        self.collapse_button.setObjectName("pokemon_summary_collapse_button")
+        self.collapse_button.setFixedSize(28, 28)
+        self.collapse_button.setIconSize(QSize(14, 14))
+        self.collapse_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.collapse_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.collapse_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.collapse_button.setCheckable(True)
+        self.collapse_button.toggled.connect(self._on_collapse_toggled)
+        self._update_collapse_button(False)
+        self.header.add_action(self.collapse_button)
         layout.addWidget(self.header)
 
         self.content_scroll_area = QScrollArea(self.container)
@@ -92,8 +112,9 @@ class PokemonEncounterSummaryWindow(QWidget):
         self.timer_label.setObjectName("summary_session_time")
         content_layout.addLayout(metrics)
 
-        rarity_section = QWidget(content)
-        rarity_layout = QVBoxLayout(rarity_section)
+        self.rarity_section = QWidget(content)
+        self.rarity_section.setObjectName("summary_rarity_section")
+        rarity_layout = QVBoxLayout(self.rarity_section)
         rarity_layout.setContentsMargins(0, 0, 0, 0)
         rarity_layout.setSpacing(3)
         rarity_heading = QLabel("RARITY BREAKDOWN")
@@ -103,7 +124,7 @@ class PokemonEncounterSummaryWindow(QWidget):
         self.rarity_counts_label.setObjectName("pokemon_encounter_rarity_counts")
         self.rarity_counts_label.setTextFormat(Qt.TextFormat.RichText)
         rarity_layout.addWidget(self.rarity_counts_label)
-        content_layout.addWidget(rarity_section)
+        content_layout.addWidget(self.rarity_section)
         self.set_rarity_counts({})
 
         outer_layout = QVBoxLayout(self)
@@ -123,16 +144,49 @@ class PokemonEncounterSummaryWindow(QWidget):
         self, game_geometry: QRect, occupied: tuple[QRect, ...] = (),
         *, size_limit: QSize | None = None,
     ) -> None:
-        size = self._preferred_size
-        if size_limit is not None:
-            size = size.boundedTo(size_limit)
-        position_panel(
-            self, game_geometry, size,
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop, occupied,
-        )
+        self._last_game_geometry = QRect(game_geometry)
+        self._last_occupied = tuple(QRect(area) for area in occupied)
+        self._last_size_limit = QSize(size_limit) if size_limit is not None else None
+        self._position_for_game()
         if not self.isVisible():
             self.show()
             self.raise_()
+
+    def _position_for_game(self) -> None:
+        if self._last_game_geometry is None:
+            self.setFixedSize(self._preferred_size)
+            return
+        size = self._preferred_size
+        if self._last_size_limit is not None:
+            size = size.boundedTo(self._last_size_limit)
+        position_panel(
+            self, self._last_game_geometry, size,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop,
+            self._last_occupied,
+        )
+
+    def _on_collapse_toggled(self, collapsed: bool) -> None:
+        self.rarity_section.setVisible(not collapsed)
+        self._preferred_size.setHeight(
+            self._COLLAPSED_HEIGHT if collapsed else self._EXPANDED_HEIGHT
+        )
+        self._update_collapse_button(collapsed)
+        self._position_for_game()
+        self.content_scroll_area.verticalScrollBar().setValue(0)
+        self.preferred_size_changed.emit()
+
+    def _update_collapse_button(self, collapsed: bool) -> None:
+        action = "Expand" if collapsed else "Collapse"
+        self.collapse_button.setToolTip(f"{action} Pokémon Summary")
+        self.collapse_button.setAccessibleName(f"{action} Pokémon Summary")
+        self.collapse_button.setIcon(
+            load_svg_icon(
+                application_path(
+                    "assets", "chevron-down.svg" if collapsed else "chevron-up.svg",
+                ),
+                self.collapse_button.iconSize(),
+            )
+        )
 
     @staticmethod
     def _add_metric(layout: QHBoxLayout, caption: str, value: str) -> QLabel:

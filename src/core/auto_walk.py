@@ -30,10 +30,10 @@ def choose_walk_duration(
 ) -> float:
     durations = (default_seconds, minimum_seconds, maximum_seconds)
     if any(
-        not math.isfinite(duration) or duration < 0.5 or duration > 3600.0
+        not math.isfinite(duration) or duration < 0.1 or duration > 3600.0
         for duration in durations
     ):
-        raise ValueError("Walk durations must be between 0.5 and 3600 seconds.")
+        raise ValueError("Walk durations must be between 0.1 and 3600 seconds.")
     if duration_mode not in _DURATION_MODES:
         raise ValueError(f"Unsupported auto-walk duration mode: {duration_mode}.")
     if duration_mode == "Default":
@@ -66,7 +66,9 @@ class AutoWalkController(QObject):
         self._minimum_seconds = 0.5
         self._maximum_seconds = 3.0
         self._held_key: int | None = None
+        self._paused_for_foreground = False
         self._last_error: str | None = None
+        self._last_status: str | None = None
 
     def update(
         self,
@@ -80,10 +82,28 @@ class AutoWalkController(QObject):
         minimum_seconds: float,
         maximum_seconds: float,
     ) -> None:
-        if not enabled or on_battle_mode is not False or window_handle <= 0:
+        if not enabled:
             self.stop()
             return
+        if on_battle_mode is not False:
+            self.stop(reason=(
+                "paused: battle detected."
+                if on_battle_mode is True
+                else "waiting for a readable battle state."
+            ))
+            return
+        if window_handle <= 0:
+            self.stop(reason="waiting for the game window.")
+            return
 
+        if (
+            window_handle, direction, duration_mode,
+            default_seconds, minimum_seconds, maximum_seconds,
+        ) != (
+            self._window_handle, self._direction, self._duration_mode,
+            self._default_seconds, self._minimum_seconds, self._maximum_seconds,
+        ):
+            self.stop()
         self._enabled = True
         self._window_handle = window_handle
         self._direction = direction
@@ -95,19 +115,24 @@ class AutoWalkController(QObject):
             is_foreground = self._game_input.is_game_foreground(window_handle)
         except (OSError, RuntimeError, ValueError) as error:
             self._report_error(error)
-            self._pause_and_retry()
+            self._pause_and_retry(reason="paused: game focus could not be checked.")
             return
 
         if not is_foreground:
             self._pause_and_retry()
             return
+        if self._paused_for_foreground:
+            self._paused_for_foreground = False
+            self._timer.stop()
         if self._held_key is None and not self._timer.isActive():
             self._start_segment()
 
-    def stop(self) -> None:
+    def stop(self, *, reason: str | None = None) -> None:
         self._enabled = False
+        self._paused_for_foreground = False
         self._timer.stop()
         self._release_held_key()
+        self._report_status(reason)
 
     def _start_segment(self) -> None:
         if not self._enabled:
@@ -116,6 +141,7 @@ class AutoWalkController(QObject):
             if not self._game_input.is_game_foreground(self._window_handle):
                 self._pause_and_retry()
                 return
+            self._paused_for_foreground = False
             key = choose_walk_key(self._direction)
             duration = choose_walk_duration(
                 self._duration_mode,
@@ -132,16 +158,19 @@ class AutoWalkController(QObject):
         self._last_error = None
         self._held_key = key
         self._timer.start(max(1, round(duration * 1000)))
+        self._report_status("started.")
 
     def _finish_segment(self) -> None:
         self._release_held_key()
         self._start_segment()
 
-    def _pause_and_retry(self) -> None:
+    def _pause_and_retry(self, *, reason: str = "paused: game is not focused.") -> None:
+        self._paused_for_foreground = True
         if self._held_key is not None:
             self._timer.stop()
             self._release_held_key()
         self._schedule_retry()
+        self._report_status(reason)
 
     def _schedule_retry(self) -> None:
         if self._enabled and not self._timer.isActive():
@@ -162,4 +191,12 @@ class AutoWalkController(QObject):
         if message == self._last_error:
             return
         self._last_error = message
+        self._last_status = None
         self._log_message("ERROR", f"Auto Walk input failed: {message}")
+
+    def _report_status(self, message: str | None) -> None:
+        if message == self._last_status:
+            return
+        self._last_status = message
+        if message is not None:
+            self._log_message("INFO", f"Auto Walk {message}")

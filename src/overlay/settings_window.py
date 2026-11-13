@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -37,14 +38,212 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.auto_battle import AUTO_BATTLE_MODES
+from core.ev_training import (
+    EV_STATS, EV_STAT_LIMIT, EV_TOTAL_LIMIT, EVProgress,
+    default_ev_values, ev_yield_for_pokemon, load_ev_training_data,
+)
 from core.pokemon_rarity import RARITIES, load_pokemon_rarity_data
-from overlay.appearance import apply_overlay_stylesheet
+from core.pokemon_targets import PokemonTarget, parse_pokemon_targets
+from overlay.appearance import apply_overlay_stylesheet, background_transparency
 from overlay.window_drag import OverlayWindowDrag
 from utils.runtime_paths import application_path
 from utils.svg_loader import load_svg_icon
 
 
+class _SettingsComboBox(QComboBox):
+    """Keep mouse-only dropdowns non-activating when used over the game."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._popup: QWidget | None = None
+
+    def showPopup(self) -> None:
+        popup = self.view().window()
+        self._popup = popup
+        accepts_focus = not bool(
+            self.window().windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus
+        )
+        # Qt.Popup grabs keyboard focus even with WindowDoesNotAcceptFocus.
+        # A tool window keeps mouse selection working without that activation.
+        flags = (
+            (Qt.WindowType.Popup if accepts_focus else Qt.WindowType.Tool)
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        if not accepts_focus:
+            flags |= Qt.WindowType.WindowDoesNotAcceptFocus
+        popup.setWindowFlags(flags)
+        popup.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, not accepts_focus)
+        popup.installEventFilter(self)
+        animated = QApplication.isEffectEnabled(Qt.UIEffect.UI_AnimateCombo)
+        if not accepts_focus and animated:
+            # The native roll animation can show the tool again after its
+            # owning tab was hidden or an outside click dismissed it.
+            QApplication.setEffectEnabled(Qt.UIEffect.UI_AnimateCombo, False)
+        try:
+            super().showPopup()
+        finally:
+            if not accepts_focus and animated:
+                QApplication.setEffectEnabled(Qt.UIEffect.UI_AnimateCombo, True)
+        if not accepts_focus and popup.isVisible():
+            QApplication.instance().installEventFilter(self)
+
+    def eventFilter(self, watched, event) -> bool:
+        popup = self._popup
+        if popup is not None and popup.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus:
+            if watched is popup and event.type() == QEvent.Type.Hide:
+                QApplication.instance().removeEventFilter(self)
+            elif (
+                event.type() == QEvent.Type.MouseButtonPress
+                and isinstance(watched, QWidget)
+                and watched is not self
+                and not self.isAncestorOf(watched)
+                and not popup.geometry().contains(event.globalPosition().toPoint())
+            ):
+                self.hidePopup()
+        return super().eventFilter(watched, event)
+
+    def hideEvent(self, event) -> None:
+        self.hidePopup()
+        super().hideEvent(event)
+
+
+class _EVNumberInput(QSpinBox):
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        if background_transparency(self) == 100:
+            # Windows sends clicks through zero-alpha pixels in a layered
+            # window. An imperceptible fill keeps the whole number editable.
+            painter = QPainter(self)
+            painter.fillRect(self.rect(), QColor(15, 23, 42, 1))
+
+
+class _EVSpinBox(_EVNumberInput):
+    """Type EV numbers in a focused editor while in-game Settings stays passive."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("ev_training_spin")
+        self.setRange(0, EV_STAT_LIMIT)
+        self.setKeyboardTracking(False)
+        self.lineEdit().installEventFilter(self)
+        self._closing_editor = False
+        self.popup = QFrame(
+            self,
+            Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint,
+        )
+        self.popup.setObjectName("ev_training_number_popup")
+        self.popup.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        outer = QVBoxLayout(self.popup)
+        outer.setContentsMargins(0, 0, 0, 0)
+        panel = QFrame(self.popup)
+        panel.setObjectName("ev_training_number_panel")
+        outer.addWidget(panel)
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(10, 8, 10, 8)
+        self.editor_title = QLabel(panel)
+        self.editor_title.setObjectName("ev_training_number_title")
+        self.editor_title.setWordWrap(True)
+        layout.addWidget(self.editor_title)
+        self.editor = _EVNumberInput(panel)
+        self.editor.setObjectName("ev_training_spin")
+        self.editor.setKeyboardTracking(False)
+        self.editor.installEventFilter(self)
+        self.editor.lineEdit().installEventFilter(self)
+        self.editor.editingFinished.connect(self._finish_editor)
+        layout.addWidget(self.editor)
+        self.editor_help = QLabel(panel)
+        self.editor_help.setObjectName("settings_help")
+        self.editor_help.setWordWrap(True)
+        layout.addWidget(self.editor_help)
+        self.popup.installEventFilter(self)
+        apply_overlay_stylesheet(self.popup, "settings.qss")
+
+    def _show_editor(self) -> None:
+        if not self.isEnabled():
+            return
+        self.editor.setRange(self.minimum(), self.maximum())
+        self.editor.setValue(self.value())
+        self.editor.setAccessibleName(self.accessibleName())
+        self.editor_title.setText(self.accessibleName())
+        self.editor_help.setText(f"0–{self.maximum()} · Enter to apply")
+        self.popup.setFixedWidth(max(190, self.width()))
+        self.popup.adjustSize()
+        bounds = self.screen().availableGeometry()
+        position = self.mapToGlobal(QPoint(0, self.height()))
+        if position.y() + self.popup.height() > bounds.bottom():
+            position.setY(self.mapToGlobal(QPoint()).y() - self.popup.height())
+        position.setX(max(bounds.left(), min(position.x(), bounds.right() - self.popup.width() + 1)))
+        position.setY(max(bounds.top(), min(position.y(), bounds.bottom() - self.popup.height() + 1)))
+        self.popup.move(position)
+        self.popup.show()
+        self.popup.raise_()
+        self.popup.activateWindow()
+        self.editor.setFocus(Qt.FocusReason.MouseFocusReason)
+        self.editor.selectAll()
+
+    def _finish_editor(self, *, apply: bool = True) -> None:
+        if self._closing_editor or not self.popup.isVisible():
+            return
+        self._closing_editor = True
+        try:
+            if apply and self.isEnabled():
+                self.editor.interpretText()
+                self.setValue(self.editor.value())
+            self.popup.hide()
+        finally:
+            self._closing_editor = False
+
+    def eventFilter(self, watched, event) -> bool:
+        popup = getattr(self, "popup", None)
+        if watched is self.lineEdit() and event.type() == QEvent.Type.MouseButtonPress:
+            if event.button() == Qt.MouseButton.LeftButton and self.window().windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus:
+                self._show_editor()
+                return True
+        if watched is self.lineEdit() and event.type() == QEvent.Type.KeyPress:
+            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                self.keyPressEvent(event)
+                return True
+        if popup is not None:
+            if watched is popup and event.type() == QEvent.Type.Hide and not self._closing_editor:
+                # Clicking outside a Qt.Popup closes it before editingFinished.
+                if self.isEnabled():
+                    self.editor.interpretText()
+                    self.setValue(self.editor.value())
+            if event.type() == QEvent.Type.KeyPress and watched in (self.editor, self.editor.lineEdit()):
+                if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Escape):
+                    self._finish_editor(apply=event.key() != Qt.Key.Key_Escape)
+                    return True
+        return super().eventFilter(watched, event)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            # Enter commits an inline launcher edit without accepting Settings.
+            self.interpretText()
+            self.editingFinished.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def hideEvent(self, event) -> None:
+        if hasattr(self, "popup"):
+            self._finish_editor()
+        super().hideEvent(event)
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.EnabledChange and not self.isEnabled() and hasattr(self, "popup"):
+            self._finish_editor(apply=False)
+
+
 class _PokemonCheckDelegate(QStyledItemDelegate):
+    NATURE_MATCH_ROLE = Qt.ItemDataRole.UserRole.value + 1
+
+    def __init__(self, parent=None, *, allow_synchronize: bool = True) -> None:
+        super().__init__(parent)
+        self.allow_synchronize = allow_synchronize
+
     @staticmethod
     def _is_checked(state) -> bool:
         return int(getattr(state, "value", state) or 0) == Qt.CheckState.Checked.value
@@ -57,10 +256,36 @@ class _PokemonCheckDelegate(QStyledItemDelegate):
         checkbox.setSize(QSize(checkbox_size, checkbox_size))
         return checkbox
 
+    @staticmethod
+    def _synchronize_checkbox_rect(option: QStyleOptionViewItem) -> QRect:
+        return QRect(
+            option.rect.right() - 75,
+            option.rect.top() + (option.rect.height() - 16) // 2,
+            16, 16,
+        )
+
+    @staticmethod
+    def _paint_checkbox(painter: QPainter, checkbox: QRect, checked: bool) -> None:
+        painter.setPen(QPen(QColor("#22C55E" if checked else "#9CA3AF"), 1.5))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(checkbox, 3, 3)
+        if checked:
+            painter.setPen(QPen(QColor("#22C55E"), 2))
+            painter.drawLine(
+                checkbox.left() + 3, checkbox.top() + 8,
+                checkbox.left() + 6, checkbox.top() + 11,
+            )
+            painter.drawLine(
+                checkbox.left() + 6, checkbox.top() + 11,
+                checkbox.left() + 13, checkbox.top() + 4,
+            )
+
     def paint(self, painter: QPainter, option, index) -> None:
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
         hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
         painter.save()
+        if not index.flags() & Qt.ItemFlag.ItemIsEnabled:
+            painter.setOpacity(0.45)
         if selected:
             painter.fillRect(option.rect, QColor(56, 189, 248, 55))
         elif hovered:
@@ -69,33 +294,22 @@ class _PokemonCheckDelegate(QStyledItemDelegate):
         checkbox = self._checkbox_rect(option)
         checked = self._is_checked(index.data(Qt.ItemDataRole.CheckStateRole))
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(
-            QPen(
-                QColor("#22C55E" if checked else "#9CA3AF"),
-                1.5,
-            )
-        )
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawRoundedRect(checkbox, 3, 3)
-        if checked:
-            painter.setPen(QPen(QColor("#22C55E"), 2))
-            painter.drawLine(
-                checkbox.left() + 3,
-                checkbox.top() + 8,
-                checkbox.left() + 6,
-                checkbox.top() + 11,
-            )
-            painter.drawLine(
-                checkbox.left() + 6,
-                checkbox.top() + 11,
-                checkbox.left() + 13,
-                checkbox.top() + 4,
+        self._paint_checkbox(painter, checkbox, checked)
+        if self.allow_synchronize:
+            synchronize_checkbox = self._synchronize_checkbox_rect(option)
+            synchronize_only = bool(index.data(self.NATURE_MATCH_ROLE))
+            self._paint_checkbox(painter, synchronize_checkbox, synchronize_only)
+            painter.setPen(QColor("#4ADE80" if synchronize_only else "#A6B7CD"))
+            painter.drawText(
+                QRect(synchronize_checkbox.right() + 6, option.rect.top(), 52, option.rect.height()),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                "S only",
             )
 
         text_option = QStyleOptionViewItem(option)
         self.initStyleOption(text_option, index)
         text_option.features &= ~QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
-        text_option.rect = option.rect.adjusted(32, 0, -4, 0)
+        text_option.rect = option.rect.adjusted(32, 0, -82 if self.allow_synchronize else -6, 0)
         text_option.state &= ~(
             QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_MouseOver
         )
@@ -108,6 +322,8 @@ class _PokemonCheckDelegate(QStyledItemDelegate):
         painter.restore()
 
     def editorEvent(self, event, model, option, index) -> bool:
+        if not index.flags() & Qt.ItemFlag.ItemIsEnabled:
+            return False
         mouse_toggle = (
             event.type() == QEvent.Type.MouseButtonRelease
             and event.button() == Qt.MouseButton.LeftButton
@@ -117,6 +333,18 @@ class _PokemonCheckDelegate(QStyledItemDelegate):
             event.type() == QEvent.Type.KeyPress
             and event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Select)
         )
+        synchronize_toggle = (
+            mouse_toggle
+            and event.position().x() >= self._synchronize_checkbox_rect(option).left() - 4
+        ) or (
+            event.type() == QEvent.Type.KeyPress
+            and event.key() == Qt.Key.Key_S
+            and event.modifiers() == Qt.KeyboardModifier.ControlModifier
+        )
+        if self.allow_synchronize and synchronize_toggle:
+            return model.setData(
+                index, not bool(index.data(self.NATURE_MATCH_ROLE)), self.NATURE_MATCH_ROLE,
+            )
         if mouse_toggle or keyboard_toggle:
             current_state = index.data(Qt.ItemDataRole.CheckStateRole)
             new_state = (
@@ -135,16 +363,30 @@ class _PokemonCheckDelegate(QStyledItemDelegate):
 class _DesiredPokemonPicker(QWidget):
     textChanged = Signal(str)
     _RARITIES = tuple((code, label) for code, label, _color in RARITIES)
+    _POPUP_WIDTH = 340
+    _POPUP_HEIGHT = 390
 
     def __init__(
         self,
         parent: QWidget | None = None,
         *,
         popup_title: str = "Choose desired Pokemon",
+        allow_synchronize: bool = True,
+        pokemon_names: list[str] | None = None,
+        show_rarity: bool = True,
     ) -> None:
         super().__init__(parent)
         self._pokemon_names, self._rarity_by_name = self._load_pokemon_data()
+        self._allow_custom_names = pokemon_names is None
+        if pokemon_names is not None:
+            self._pokemon_names = pokemon_names.copy()
+        self._allow_synchronize = allow_synchronize
+        self._excluded_names: set[str] = set()
+        self._exclusion_reason = ""
+        self._eligible_names: set[str] | None = None
+        self._item_descriptions: dict[str, str] = {}
         self._selected_names: set[str] = set()
+        self._synchronized_names: set[str] = set()
         self._items_by_name: dict[str, QListWidgetItem] = {}
 
         row = QHBoxLayout(self)
@@ -156,7 +398,7 @@ class _DesiredPokemonPicker(QWidget):
         self.display.setPlaceholderText("Click to choose Pokemon")
         self.display.setCursor(Qt.CursorShape.PointingHandCursor)
         self.display.setFixedHeight(36)
-        self.display.setAccessibleName("Choose desired Pokemon")
+        self.display.setAccessibleName(popup_title)
         self.display.installEventFilter(self)
         row.addWidget(self.display, 1)
 
@@ -167,8 +409,18 @@ class _DesiredPokemonPicker(QWidget):
             | Qt.WindowType.WindowStaysOnTopHint,
         )
         self.popup.setObjectName("desired_pokemon_popup")
-        self.popup.setFixedSize(340, 390)
-        popup_layout = QVBoxLayout(self.popup)
+        self.popup.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.popup.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        apply_overlay_stylesheet(self.popup, "settings.qss")
+        self.popup.setFixedSize(self._POPUP_WIDTH, self._POPUP_HEIGHT)
+        popup_outer_layout = QVBoxLayout(self.popup)
+        popup_outer_layout.setContentsMargins(0, 0, 0, 0)
+        # The native translucent Popup does not paint its own QSS background.
+        # Use the same inner glass-panel pattern as the other overlay windows.
+        self.popup_panel = QFrame(self.popup)
+        self.popup_panel.setObjectName("desired_pokemon_popup_panel")
+        popup_outer_layout.addWidget(self.popup_panel)
+        popup_layout = QVBoxLayout(self.popup_panel)
         popup_layout.setContentsMargins(10, 10, 10, 10)
         popup_layout.setSpacing(8)
 
@@ -181,7 +433,7 @@ class _DesiredPokemonPicker(QWidget):
         self.search_input.setAccessibleName("Search Pokemon by name")
         self.search_input.textChanged.connect(self._filter_pokemon)
         popup_layout.addWidget(self.search_input)
-        self.rarity_filter = QComboBox(self.popup)
+        self.rarity_filter = _SettingsComboBox(self.popup)
         self.rarity_filter.setObjectName("desired_pokemon_rarity_filter")
         self.rarity_filter.setAccessibleName("Filter Pokemon by rarity")
         self.rarity_filter.addItem("All rarities", "")
@@ -189,6 +441,15 @@ class _DesiredPokemonPicker(QWidget):
             self.rarity_filter.addItem(f"{code.upper()} - {label}", code)
         self.rarity_filter.currentIndexChanged.connect(self._filter_pokemon)
         popup_layout.addWidget(self.rarity_filter)
+        self.rarity_filter.setVisible(show_rarity)
+        self.synchronize_help = QLabel(
+            "Check S only beside a Pokemon to require the green Synchronize S "
+            "(Nature Match, not Shiny).", self.popup,
+        )
+        self.synchronize_help.setObjectName("desired_pokemon_synchronize_help")
+        self.synchronize_help.setWordWrap(True)
+        popup_layout.addWidget(self.synchronize_help)
+        self.synchronize_help.setVisible(allow_synchronize)
         self.select_all = QCheckBox("Select all shown", self.popup)
         self.select_all.setObjectName("desired_pokemon_select_all")
         self.select_all.toggled.connect(self._on_select_all_changed)
@@ -200,7 +461,14 @@ class _DesiredPokemonPicker(QWidget):
         self.pokemon_list = QListWidget(self.popup)
         self.pokemon_list.setObjectName("desired_pokemon_list")
         self.pokemon_list.setUniformItemSizes(True)
-        self.pokemon_list.setItemDelegate(_PokemonCheckDelegate(self.pokemon_list))
+        self.pokemon_list.setAccessibleDescription(
+            "Select target Pokemon. S only requires Nature Match; Ctrl+S toggles it on the current row."
+            if allow_synchronize else "Select target Pokemon. Space toggles the current row.",
+        )
+        self.pokemon_list.setItemDelegate(_PokemonCheckDelegate(
+            self.pokemon_list, allow_synchronize=allow_synchronize,
+        ))
+        self.pokemon_list.installEventFilter(self)
         self.pokemon_list.itemChanged.connect(self._on_item_changed)
         popup_layout.addWidget(self.pokemon_list, 1)
         self.empty_state = QLabel("No Pokemon match these filters.", self.popup)
@@ -232,39 +500,63 @@ class _DesiredPokemonPicker(QWidget):
                 if key in self._selected_names
                 else Qt.CheckState.Unchecked
             )
+            item.setData(_PokemonCheckDelegate.NATURE_MATCH_ROLE, key in self._synchronized_names)
+            self._item_descriptions[key] = (
+                f"Select {name} normally for any encounter, or check S only to require "
+                "its green Synchronize marker. S only is Nature Match, not Shiny. "
+                "Keyboard: Space selects; Ctrl+S toggles S only."
+                if self._allow_synchronize else f"Select {name}. Keyboard: Space selects."
+            )
+            item.setToolTip(self._item_descriptions[key])
             self.pokemon_list.addItem(item)
             self._items_by_name[key] = item
 
     def text(self) -> str:
         return ", ".join(
-            name
+            PokemonTarget(name, name.casefold() in self._synchronized_names).text
             for name in self._pokemon_names
             if name.casefold() in self._selected_names
         )
 
     def setText(self, value: str) -> None:
+        targets = tuple(
+            PokemonTarget(target.name, self._allow_synchronize and target.nature_match_only)
+            for target in parse_pokemon_targets(value)
+            if target.name.casefold() not in self._excluded_names
+            and (self._allow_custom_names or target.name.casefold() in self._items_by_name)
+        )
         selected_names = {
-            name.strip().casefold()
-            for name in value.split(",")
-            if name.strip()
+            target.name.casefold() for target in targets
+        }
+        synchronized_names = {
+            target.name.casefold() for target in targets if target.nature_match_only
         }
         custom_names = [
-            name.strip()
-            for name in value.split(",")
-            if name.strip() and name.strip().casefold() not in self._items_by_name
+            target.name for target in targets
+            if target.name.casefold() not in self._items_by_name
         ]
         if custom_names:
             self._pokemon_names.extend(custom_names)
             self._add_names_to_list(custom_names)
-        changed = selected_names != self._selected_names
+        changed = (
+            selected_names != self._selected_names
+            or synchronized_names != self._synchronized_names
+        )
         self._selected_names = selected_names
-        for key, item in self._items_by_name.items():
-            item.setCheckState(
-                Qt.CheckState.Checked
-                if key in self._selected_names
-                else Qt.CheckState.Unchecked
-            )
+        self._synchronized_names = synchronized_names
+        self.pokemon_list.blockSignals(True)
+        try:
+            for key, item in self._items_by_name.items():
+                item.setCheckState(
+                    Qt.CheckState.Checked
+                    if key in self._selected_names
+                    else Qt.CheckState.Unchecked
+                )
+                item.setData(_PokemonCheckDelegate.NATURE_MATCH_ROLE, key in self._synchronized_names)
+        finally:
+            self.pokemon_list.blockSignals(False)
         self._update_display()
+        self._refresh_item_availability()
         self._filter_pokemon()
         if changed:
             self.textChanged.emit(self.text())
@@ -280,13 +572,37 @@ class _DesiredPokemonPicker(QWidget):
         if not enabled:
             self.popup.hide()
 
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.EnabledChange and not self.isEnabled():
+            # Disabling the containing Auto Battle section must dismiss its
+            # focusable popup just like disabling this picker directly.
+            self.popup.hide()
+
     def eventFilter(self, watched, event) -> bool:
+        if (
+            watched is getattr(self, "pokemon_list", None)
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() == Qt.Key.Key_S
+            and event.modifiers() == Qt.KeyboardModifier.ControlModifier
+            and self.isEnabled()
+            and self._allow_synchronize
+        ):
+            item = self.pokemon_list.currentItem()
+            if item is not None and not item.isHidden() and item.flags() & Qt.ItemFlag.ItemIsEnabled:
+                item.setData(
+                    _PokemonCheckDelegate.NATURE_MATCH_ROLE,
+                    not bool(item.data(_PokemonCheckDelegate.NATURE_MATCH_ROLE)),
+                )
+            return True
         if (
             watched is self.display
             and event.type() == QEvent.Type.MouseButtonPress
+            and event.button() == Qt.MouseButton.LeftButton
             and self.isEnabled()
         ):
             self._show_picker()
+            return True
         if (
             watched is self.display
             and event.type() == QEvent.Type.KeyPress
@@ -302,6 +618,10 @@ class _DesiredPokemonPicker(QWidget):
             return True
         return super().eventFilter(watched, event)
 
+    def hideEvent(self, event) -> None:
+        self.popup.hide()
+        super().hideEvent(event)
+
     def _show_picker(self) -> None:
         if not self.isEnabled():
             self.popup.hide()
@@ -313,12 +633,18 @@ class _DesiredPokemonPicker(QWidget):
         if screen is None:
             raise RuntimeError("Cannot open Pokemon picker without a screen.")
         bounds = screen.availableGeometry()
+        # High Windows display scaling can leave less logical screen space
+        # than the normal popup height. Keep the search and list on-screen.
+        self.popup.setFixedSize(
+            max(1, min(self._POPUP_WIDTH, bounds.width())),
+            max(1, min(self._POPUP_HEIGHT, bounds.height())),
+        )
         x = anchor.x()
         x = max(bounds.left(), min(x, bounds.right() - self.popup.width() + 1))
         y = anchor.y() + 8
         if y + self.popup.height() > bounds.bottom() + 1:
             y = self.mapToGlobal(self.rect().topLeft()).y() - self.popup.height() - 8
-        y = max(bounds.top(), y)
+        y = max(bounds.top(), min(y, bounds.bottom() - self.popup.height() + 1))
         self.popup.move(x, y)
         self.popup.show()
         self.popup.raise_()
@@ -333,14 +659,42 @@ class _DesiredPokemonPicker(QWidget):
                 not selected_rarity
                 or self._rarity_by_name.get(key, "") == selected_rarity
             )
-            item.setHidden(not (matches_query and matches_rarity))
+            matches_training = self._eligible_names is None or key in self._eligible_names
+            item.setHidden(not (matches_query and matches_rarity and matches_training))
         self._update_select_all_state()
+
+    def set_excluded_names(self, names: set[str], reason: str) -> None:
+        """Block conflicting choices without changing the other selection."""
+        self._excluded_names = names - self._selected_names
+        self._exclusion_reason = reason
+        self._refresh_item_availability()
+        self._update_select_all_state()
+
+    def _refresh_item_availability(self) -> None:
+        self.pokemon_list.blockSignals(True)
+        try:
+            for key, item in self._items_by_name.items():
+                flags = item.flags()
+                if key in self._excluded_names:
+                    flags &= ~(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
+                    item.setToolTip(self._exclusion_reason)
+                else:
+                    flags |= Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable
+                    item.setToolTip(self._item_descriptions[key])
+                item.setFlags(flags)
+        finally:
+            self.pokemon_list.blockSignals(False)
+        self.pokemon_list.viewport().update()
+
+    def set_eligible_names(self, names: set[str]) -> None:
+        self._eligible_names = names
+        self._filter_pokemon()
 
     def _on_select_all_changed(self, checked: bool) -> None:
         visible_items = [
             (key, item)
             for key, item in self._items_by_name.items()
-            if not item.isHidden()
+            if not item.isHidden() and item.flags() & Qt.ItemFlag.ItemIsEnabled
         ]
         if not visible_items:
             return
@@ -351,15 +705,17 @@ class _DesiredPokemonPicker(QWidget):
                 self._selected_names.add(key)
             else:
                 self._selected_names.discard(key)
+                self._synchronized_names.discard(key)
 
         self.pokemon_list.blockSignals(True)
         try:
-            for _, item in visible_items:
+            for key, item in visible_items:
                 item.setCheckState(
                     Qt.CheckState.Checked
                     if checked
                     else Qt.CheckState.Unchecked
                 )
+                item.setData(_PokemonCheckDelegate.NATURE_MATCH_ROLE, key in self._synchronized_names)
         finally:
             self.pokemon_list.blockSignals(False)
 
@@ -375,12 +731,13 @@ class _DesiredPokemonPicker(QWidget):
             if not item.isHidden()
         ]
         selected_count = sum(
-            key in self._selected_names for key in visible_keys
+            key in self._selected_names for key in visible_keys if key not in self._excluded_names
         )
-        self.select_all.setEnabled(bool(visible_keys))
+        selectable_keys = [key for key in visible_keys if key not in self._excluded_names]
+        self.select_all.setEnabled(bool(selectable_keys))
         self.empty_state.setVisible(not visible_keys)
-        is_all_selected = bool(visible_keys) and (
-            selected_count == len(visible_keys)
+        is_all_selected = bool(selectable_keys) and (
+            selected_count == len(selectable_keys)
         )
         self.select_all.blockSignals(True)
         self.select_all.setChecked(is_all_selected)
@@ -388,17 +745,43 @@ class _DesiredPokemonPicker(QWidget):
 
     def _on_item_changed(self, item: QListWidgetItem) -> None:
         key = item.text().casefold()
-        if item.checkState() == Qt.CheckState.Checked:
+        if key in self._excluded_names:
+            self.pokemon_list.blockSignals(True)
+            try:
+                item.setCheckState(Qt.CheckState.Unchecked)
+                item.setData(_PokemonCheckDelegate.NATURE_MATCH_ROLE, False)
+            finally:
+                self.pokemon_list.blockSignals(False)
+            return
+        selected = item.checkState() == Qt.CheckState.Checked
+        synchronized = self._allow_synchronize and bool(item.data(_PokemonCheckDelegate.NATURE_MATCH_ROLE))
+        if synchronized != (key in self._synchronized_names):
+            # Checking S only also selects that species. Unchecking S only
+            # keeps it selected normally; unchecking the main box removes both.
+            selected = selected or synchronized
+        elif not selected:
+            synchronized = False
+        if selected:
             self._selected_names.add(key)
         else:
             self._selected_names.discard(key)
+        if synchronized:
+            self._synchronized_names.add(key)
+        else:
+            self._synchronized_names.discard(key)
+        self.pokemon_list.blockSignals(True)
+        try:
+            item.setCheckState(Qt.CheckState.Checked if selected else Qt.CheckState.Unchecked)
+            item.setData(_PokemonCheckDelegate.NATURE_MATCH_ROLE, synchronized)
+        finally:
+            self.pokemon_list.blockSignals(False)
         self._update_display()
         self._update_select_all_state()
         self.textChanged.emit(self.text())
 
     def _update_display(self) -> None:
         selected = [
-            name
+            f"{name} (S only)" if name.casefold() in self._synchronized_names else name
             for name in self._pokemon_names
             if name.casefold() in self._selected_names
         ]
@@ -410,9 +793,10 @@ class _DesiredPokemonPicker(QWidget):
             display_text = f"{len(selected)} Pokemon selected: {', '.join(selected[:2])}..."
         self.display.setText(display_text)
         self.display.setToolTip(", ".join(selected))
-        self.selection_count.setText(
-            f"{len(selected)} selected" if selected else "No Pokemon selected"
-        )
+        count_text = f"{len(selected)} selected" if selected else "No Pokemon selected"
+        if self._synchronized_names:
+            count_text += f" · {len(self._synchronized_names)} S only"
+        self.selection_count.setText(count_text)
 
 
 class _SlidingTabBar(QWidget):
@@ -500,6 +884,7 @@ class _SlidingSettingsPages(QWidget):
 
     def addPage(self, page: QWidget) -> None:
         page.setParent(self)
+        page.installEventFilter(self)
         page.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         page.hide()
         self._pages.append(page)
@@ -527,13 +912,36 @@ class _SlidingSettingsPages(QWidget):
         current_page = self._pages[index]
         current_page.setGeometry(self.rect())
         current_page.show()
-        self.setMinimumHeight(current_page.sizeHint().height())
+        self.refreshHeight()
+
+    def refreshHeight(self) -> None:
+        if self._current_index < 0:
+            return
+        current_page = self._pages[self._current_index]
+        current_page.ensurePolished()
+        current_page.layout().activate()
+        height = (
+            current_page.heightForWidth(self.width())
+            if current_page.hasHeightForWidth()
+            else current_page.sizeHint().height()
+        )
+        self.setMinimumHeight(max(0, height))
         self.updateGeometry()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         if self._current_index >= 0:
             self._pages[self._current_index].setGeometry(self.rect())
+            self.refreshHeight()
+
+    def eventFilter(self, watched, event) -> bool:
+        if (
+            event.type() == QEvent.Type.LayoutRequest
+            and self._current_index >= 0
+            and watched is self._pages[self._current_index]
+        ):
+            self.refreshHeight()
+        return super().eventFilter(watched, event)
 
 
 class SettingsWindow(QDialog):
@@ -541,8 +949,10 @@ class SettingsWindow(QDialog):
 
     visibility_changed = Signal(bool)
     auto_walk_configuration_changed = Signal()
+    auto_battle_configuration_changed = Signal()
     sound_settings_changed = Signal()
     _DEFAULT_WIDTH = 500
+    _MINIMUM_CONTENT_HEIGHT = 80
     _PAGE_DESCRIPTIONS = (
         "Choose how the bot handles battles and catching.",
         "Protect special encounters and choose your catch filters.",
@@ -557,15 +967,18 @@ class SettingsWindow(QDialog):
             parent,
             Qt.WindowType.Dialog
             | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint,
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.WindowDoesNotAcceptFocus,
         )
         self.setObjectName("settings_window")
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WidgetAttribute.WA_QuitOnClose, False)
         self.setWindowTitle("Game Bot Settings")
         self.setFixedWidth(self._DEFAULT_WIDTH)
         self._last_game_geometry: QRect | None = None
         self._last_overlay_geometry: QRect | None = None
+        self._updating_auto_battle_config = False
 
         self.glass_container = QFrame(self)
         self.glass_container.setObjectName("settings_container")
@@ -663,6 +1076,7 @@ class SettingsWindow(QDialog):
         self.auto_battle_toggle = self._add_toggle(
             automation_layout, "Auto Battle", checked=True
         )
+        self._add_auto_battle_settings(automation_layout)
         self.auto_switch_fainted_pokemon_toggle = self._add_toggle(
             automation_layout, "Auto Switch Fainted Pokemon", checked=False
         )
@@ -671,10 +1085,6 @@ class SettingsWindow(QDialog):
         )
         self.auto_battle_toggle.toggled.connect(
             self._on_auto_battle_toggled
-        )
-        self.auto_run_toggle.toggled.connect(self._on_auto_run_toggled)
-        self.auto_switch_fainted_pokemon_toggle.toggled.connect(
-            self._on_auto_switch_toggled
         )
         self.auto_catching_toggle = self._add_toggle(
             automation_layout, "Auto Catching", checked=False
@@ -742,6 +1152,21 @@ class SettingsWindow(QDialog):
         fishing_layout.addWidget(fishing_description)
 
         encounter_page_layout = page_layouts["Encounters"]
+        special_message_layout = self._add_settings_section(
+            encounter_page_layout, "Special encounter popup",
+        )
+        self.auto_close_special_pokemon_message_toggle = self._add_toggle(
+            special_message_layout, "Auto Close Special Pokemon Message", checked=True,
+        )
+        special_message_help = QLabel(
+            'Closes the "You have encountered a special pokemon!" popup using '
+            "the Message Box and Close Button regions, including in keyboard mode. "
+            "When off, battle actions wait for you or the game timer to close it."
+        )
+        special_message_help.setObjectName("settings_help")
+        special_message_help.setWordWrap(True)
+        special_message_layout.addWidget(special_message_help)
+        self.auto_close_special_pokemon_message_toggle.setToolTip(special_message_help.text())
         encounter_layout = self._add_settings_section(
             encounter_page_layout,
             "Encounter rules",
@@ -884,7 +1309,7 @@ class SettingsWindow(QDialog):
         item_label = QLabel("Items to Catch")
         item_label.setObjectName("auto_catching_setting_label")
         item_row.addWidget(item_label, 1)
-        self.auto_catching_item_selection = QComboBox()
+        self.auto_catching_item_selection = _SettingsComboBox()
         self.auto_catching_item_selection.setObjectName(
             "auto_catching_item_selection"
         )
@@ -934,7 +1359,8 @@ class SettingsWindow(QDialog):
         )
         catch_filter_help = QLabel(
             "Enable the matching Stop Battle rule above to use each filter. "
-            "Desired and Elite selections use their Advanced Settings."
+            "Desired and Elite selections use their Advanced Settings, including "
+            "each Pokemon's S only requirement."
         )
         catch_filter_help.setObjectName("auto_catching_description")
         catch_filter_help.setWordWrap(True)
@@ -1095,17 +1521,17 @@ class SettingsWindow(QDialog):
         content.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         content.setSizePolicy(
             QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Maximum,
+            QSizePolicy.Policy.Expanding,
         )
         self.content_scroll_area.viewport().setAutoFillBackground(False)
         self.content_scroll_area.viewport().setAttribute(
             Qt.WidgetAttribute.WA_TranslucentBackground
         )
         self.content_scroll_area.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored
         )
         self.content_scroll_area.setMinimumHeight(0)
-        panel_layout.addWidget(self.content_scroll_area)
+        panel_layout.addWidget(self.content_scroll_area, 1)
 
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
@@ -1147,24 +1573,283 @@ class SettingsWindow(QDialog):
 
         apply_overlay_stylesheet(self, "settings.qss")
 
+        for picker in (self.specific_pokemon_input, self.ev_training_pokemon_input, self.desired_pokemon_input):
+            picker.textChanged.connect(self._sync_battle_target_exclusions)
+        self.specific_pokemon_input.textChanged.connect(self._emit_auto_battle_configuration_changed)
+        self.ev_training_pokemon_input.textChanged.connect(self._on_ev_filters_changed)
+        self.ev_training_pokemon_input.search_input.textChanged.connect(self._emit_auto_battle_configuration_changed)
+        self.auto_battle_mode_selection.currentTextChanged.connect(self._on_auto_battle_mode_changed)
+        self.auto_battle_elite_only_toggle.toggled.connect(self._on_auto_battle_mode_changed)
+        self._sync_battle_target_exclusions()
+        self._on_auto_battle_mode_changed()
+
+    def _add_auto_battle_settings(self, layout: QVBoxLayout) -> None:
+        self.auto_battle_configuration = QWidget()
+        config = QVBoxLayout(self.auto_battle_configuration)
+        config.setContentsMargins(0, 0, 0, 0)
+        config.setSpacing(8)
+        layout.addWidget(self.auto_battle_configuration)
+        label = QLabel("Auto Battle Mode")
+        label.setObjectName("auto_catching_setting_label")
+        config.addWidget(label)
+        self.auto_battle_mode_selection = _SettingsComboBox()
+        self.auto_battle_mode_selection.setObjectName("auto_battle_mode_selection")
+        self.auto_battle_mode_selection.setAccessibleName("Auto Battle Mode")
+        self.auto_battle_mode_selection.addItems(AUTO_BATTLE_MODES)
+        config.addWidget(self.auto_battle_mode_selection)
+        help_label = QLabel(
+            "Auto Battle takes priority over Auto Run. Specific Only uses Auto Run when enabled. "
+            "EV Training automatically runs from unsuitable encounters. "
+            "Stop Battle and Auto Catching rules still apply."
+        )
+        help_label.setObjectName("settings_help")
+        help_label.setWordWrap(True)
+        config.addWidget(help_label)
+
+        self.specific_battle_settings = QWidget()
+        specific = QVBoxLayout(self.specific_battle_settings)
+        specific.setContentsMargins(0, 0, 0, 0)
+        specific.setSpacing(8)
+        specific.addWidget(QLabel("Specific Pokemon to battle"))
+        self.specific_pokemon_input = _DesiredPokemonPicker(
+            popup_title="Choose specific battle Pokemon", allow_synchronize=False,
+        )
+        specific.addWidget(self.specific_pokemon_input)
+        conflict_help = QLabel(
+            "Pokemon selected in Stop Battle → Desired Pokemon are unavailable. "
+            "Uncheck them there first."
+        )
+        conflict_help.setObjectName("settings_help")
+        conflict_help.setWordWrap(True)
+        specific.addWidget(conflict_help)
+        self.auto_battle_elite_only_toggle = self._add_toggle(
+            specific, "Elite Pokemon Only", checked=False,
+        )
+        self.auto_battle_elite_only_toggle.setToolTip(
+            "Battle selected species only when Elite. Disables Stop Battle for Elite Pokemon."
+        )
+        config.addWidget(self.specific_battle_settings)
+
+        self._ev_training_entries = load_ev_training_data()
+        self.ev_training_settings = QWidget()
+        ev_layout = QVBoxLayout(self.ev_training_settings)
+        ev_layout.setContentsMargins(0, 0, 0, 0)
+        ev_layout.setSpacing(8)
+        ev_layout.addWidget(QLabel("EV Training Pokemon"))
+        self.ev_training_category_filter = _SettingsComboBox()
+        self.ev_training_category_filter.setObjectName("ev_training_category_filter")
+        self.ev_training_category_filter.setAccessibleName("Browse EV training category")
+        self.ev_training_category_filter.setToolTip(
+            "Browse the catalog by category. Selected Pokemon from every category stay active."
+        )
+        self.ev_training_category_filter.addItem("All training categories", "")
+        for category in dict.fromkeys(entry.training_category for entry in self._ev_training_entries):
+            self.ev_training_category_filter.addItem(category, category)
+        ev_layout.addWidget(self.ev_training_category_filter)
+        self.ev_training_pokemon_input = _DesiredPokemonPicker(
+            popup_title="Choose EV training Pokemon", allow_synchronize=False, show_rarity=False,
+            pokemon_names=list(dict.fromkeys(entry.pokemon for entry in self._ev_training_entries)),
+        )
+        for key in self.ev_training_pokemon_input._items_by_name:
+            self.ev_training_pokemon_input._item_descriptions[key] = "\n".join(dict.fromkeys(
+                f"{entry.training_category}: {entry.ev_yield} · {entry.region}, {entry.location}"
+                for entry in self._ev_training_entries if entry.pokemon.casefold() == key
+            ))
+        ev_layout.addWidget(self.ev_training_pokemon_input)
+        ev_help = QLabel(
+            "Enter the current EVs of the Pokemon you are training, then its final targets. "
+            "Click a number to type. Maximum: 252 per stat, 510 total. "
+            "A target of 0 skips that stat; its current EVs still count toward 510.\n"
+            "Selected Pokemon from all categories train the remaining stats together. "
+            "Desired Pokemon selections are unavailable until unchecked there."
+        )
+        ev_help.setObjectName("settings_help")
+        ev_help.setWordWrap(True)
+        ev_layout.addWidget(ev_help)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(6)
+        grid.setVerticalSpacing(6)
+        self.ev_training_current_inputs: dict[str, _EVSpinBox] = {}
+        self.ev_training_target_inputs: dict[str, _EVSpinBox] = {}
+        self.ev_training_remaining_labels: dict[str, QLabel] = {}
+        for column, text in enumerate(("Stat", "Current EV", "Target EV", "Remaining EV")):
+            header = QLabel(text)
+            header.setObjectName("ev_training_column_header")
+            header.setWordWrap(True)
+            header.setAlignment(Qt.AlignmentFlag.AlignCenter if column else Qt.AlignmentFlag.AlignLeft)
+            grid.addWidget(header, 0, column)
+            grid.setColumnStretch(column, 1)
+        for row, (key, label, _category) in enumerate(EV_STATS, start=1):
+            grid.addWidget(QLabel(label), row, 0)
+            for column, (kind, inputs) in enumerate((
+                ("Current", self.ev_training_current_inputs), ("Target", self.ev_training_target_inputs),
+            ), start=1):
+                spin = _EVSpinBox()
+                spin.setAccessibleName(f"{label} {kind} EV")
+                spin.setToolTip(f"Type {label} {kind.lower()} EVs. Values share the 510 total EV limit.")
+                inputs[key] = spin
+                grid.addWidget(spin, row, column)
+                spin.valueChanged.connect(self._on_ev_filters_changed)
+            remaining = QLabel("0")
+            remaining.setObjectName("ev_training_remaining")
+            remaining.setAccessibleName(f"{label} Remaining EV")
+            remaining.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.ev_training_remaining_labels[key] = remaining
+            grid.addWidget(remaining, row, 3)
+        ev_layout.addLayout(grid)
+        self.ev_training_totals = QLabel()
+        self.ev_training_totals.setObjectName("settings_help")
+        self.ev_training_totals.setWordWrap(True)
+        ev_layout.addWidget(self.ev_training_totals)
+        self.ev_training_status = QLabel()
+        self.ev_training_status.setObjectName("ev_training_status")
+        self.ev_training_status.setWordWrap(True)
+        ev_layout.addWidget(self.ev_training_status)
+        self.ev_training_match_count = QLabel()
+        self.ev_training_match_count.setObjectName("settings_help")
+        self.ev_training_match_count.setWordWrap(True)
+        ev_layout.addWidget(self.ev_training_match_count)
+        self.ev_training_reset_button = QPushButton("Reset EV Training")
+        self.ev_training_reset_button.setObjectName("ev_training_reset_button")
+        self.ev_training_reset_button.setAutoDefault(False)
+        self.ev_training_reset_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.ev_training_reset_button.setToolTip(
+            "Clear EV progress, targets, selections, and browsing filters. "
+            "Enter the new Pokemon's current EVs before training."
+        )
+        self.ev_training_reset_button.clicked.connect(self._reset_ev_training)
+        ev_layout.addWidget(self.ev_training_reset_button)
+        self.ev_training_category_filter.currentIndexChanged.connect(self._on_ev_filters_changed)
+        config.addWidget(self.ev_training_settings)
+        self.specific_battle_settings.hide()
+        self.ev_training_settings.hide()
+        self._on_ev_filters_changed()
+
+    def ev_training_progress(self) -> EVProgress:
+        return EVProgress(
+            {key: spin.value() for key, spin in self.ev_training_current_inputs.items()},
+            {key: spin.value() for key, spin in self.ev_training_target_inputs.items()},
+        )
+
+    def ev_training_yield(self, pokemon: object) -> tuple[int, ...] | None:
+        return ev_yield_for_pokemon(pokemon, self._ev_training_entries)
+
+    def ev_training_target_names(self) -> str:
+        """All selected yields that fit, independent of category/search browsing."""
+        progress = self.ev_training_progress()
+        return ", ".join(
+            target.name for target in parse_pokemon_targets(self.ev_training_pokemon_input.text())
+            if (yields := self.ev_training_yield(target.name)) is not None and progress.fits(yields)
+        )
+
+    def set_ev_training_progress(self, current: dict[str, int], targets: dict[str, int]) -> None:
+        progress = EVProgress(current, targets)
+        updating = self._updating_auto_battle_config
+        self._updating_auto_battle_config = True
+        try:
+            for inputs, values in (
+                (self.ev_training_current_inputs, progress.current),
+                (self.ev_training_target_inputs, progress.targets),
+            ):
+                for key, spin in inputs.items():
+                    spin.setMaximum(EV_STAT_LIMIT)
+                    spin.setValue(values[key])
+        finally:
+            self._updating_auto_battle_config = updating
+        self._on_ev_filters_changed()
+
+    def _on_ev_filters_changed(self, *_args) -> None:
+        if self._updating_auto_battle_config:
+            return
+        progress = self.ev_training_progress()
+        for inputs, values in (
+            (self.ev_training_current_inputs, progress.current),
+            (self.ev_training_target_inputs, progress.targets),
+        ):
+            for key, spin in inputs.items():
+                spin.setMaximum(min(EV_STAT_LIMIT, EV_TOTAL_LIMIT - sum(values.values()) + values[key]))
+        for key, remaining in progress.remaining.items():
+            self.ev_training_remaining_labels[key].setText(str(remaining))
+        self.ev_training_totals.setText(
+            f"Total EVs: {progress.total} / 510 · Target: {sum(progress.targets.values())} / 510\n"
+            f"Remaining to targets: {sum(progress.remaining.values())} · Available: {510 - progress.total}"
+        )
+        if progress.total >= EV_TOTAL_LIMIT:
+            status = "Complete — 510 total EVs reached. EV training is stopped."
+        elif not any(progress.targets.values()):
+            status = "Enter target EVs to start training."
+        elif progress.complete:
+            status = "Complete — all target EVs reached. EV training is stopped."
+        else:
+            status = "Confirmed defeats update progress automatically. Oversized yields use Auto Run."
+        self.ev_training_status.setText(status)
+        category = self.ev_training_category_filter.currentData()
+        shown = {
+            entry.pokemon.casefold() for entry in self._ev_training_entries
+            if not category or entry.training_category == category
+        }
+        picker = self.ev_training_pokemon_input
+        picker.set_eligible_names(shown)
+        active = len(parse_pokemon_targets(self.ev_training_target_names()))
+        self.ev_training_match_count.setText(
+            f"{active} of {len(picker._selected_names)} selected Pokemon fit the remaining EVs. "
+            "Category and search filter the catalog only."
+        )
+        self._emit_auto_battle_configuration_changed()
+
+    def _reset_ev_training(self) -> None:
+        self._updating_auto_battle_config = True
+        try:
+            picker = self.ev_training_pokemon_input
+            picker.setText("")
+            picker.search_input.clear()
+            picker.rarity_filter.setCurrentIndex(0)
+            self.ev_training_category_filter.setCurrentIndex(0)
+            self.set_ev_training_progress(default_ev_values(), default_ev_values())
+        finally:
+            self._updating_auto_battle_config = False
+        self._on_ev_filters_changed()
+
+    def _sync_battle_target_exclusions(self, *_args) -> None:
+        desired = self.desired_pokemon_input
+        specific = self.specific_pokemon_input
+        training = self.ev_training_pokemon_input
+        for picker in (specific, training):
+            picker.set_excluded_names(
+                desired._selected_names,
+                "Selected in Stop Battle → Desired Pokemon. Uncheck it there first.",
+            )
+        desired.set_excluded_names(
+            specific._selected_names | training._selected_names,
+            "Selected in Specific Only or EV Training Only. Uncheck it there first.",
+        )
+
+    def _on_auto_battle_mode_changed(self, *_args) -> None:
+        mode = self.auto_battle_mode_selection.currentText()
+        self.specific_battle_settings.setVisible(mode == "Specific Only")
+        self.ev_training_settings.setVisible(mode == "EV Training Only")
+        elite_only = mode == "Specific Only" and self.auto_battle_elite_only_toggle.isChecked()
+        if elite_only:
+            self.stop_for_elite_toggle.setChecked(False)
+        self.stop_for_elite_toggle.setEnabled(not elite_only)
+        self.elite_pokemon_advanced_toggle.setEnabled(not elite_only)
+        self.stop_for_elite_toggle.setToolTip(
+            "Disabled by Specific Only → Elite Pokemon Only."
+            if elite_only else "Stop Battle for Elite Pokemon"
+        )
+        self._refresh_settings_geometry()
+        self._emit_auto_battle_configuration_changed()
+
+    def _emit_auto_battle_configuration_changed(self, *_args) -> None:
+        if not self._updating_auto_battle_config:
+            self.auto_battle_configuration_changed.emit()
+
     def _select_settings_page(self, index: int) -> None:
         if not 0 <= index < len(self._PAGE_DESCRIPTIONS):
             return
         self._settings_pages.setCurrentIndex(index)
         self.settings_tabs.setCurrentIndex(index, animate=False)
         self.page_description.setText(self._PAGE_DESCRIPTIONS[index])
-        if self.isVisible():
-            self.content_scroll_area.setFixedHeight(
-                max(0, self.height() - self._fixed_panel_height())
-            )
-        content = self.content_scroll_area.widget()
-        if content is not None:
-            content.setMinimumHeight(
-                max(
-                    self.content_scroll_area.viewport().height(),
-                    self._settings_pages.sizeHint().height(),
-                )
-            )
         self.content_scroll_area.verticalScrollBar().setValue(0)
 
     @staticmethod
@@ -1188,19 +1873,7 @@ class SettingsWindow(QDialog):
         self._refresh_settings_geometry()
 
     def _on_auto_battle_toggled(self, enabled: bool) -> None:
-        if enabled and self.auto_run_toggle.isChecked():
-            self.auto_run_toggle.setChecked(False)
-
-    def _on_auto_run_toggled(self, enabled: bool) -> None:
-        if enabled:
-            if self.auto_battle_toggle.isChecked():
-                self.auto_battle_toggle.setChecked(False)
-            if self.auto_switch_fainted_pokemon_toggle.isChecked():
-                self.auto_switch_fainted_pokemon_toggle.setChecked(False)
-
-    def _on_auto_switch_toggled(self, enabled: bool) -> None:
-        if enabled and self.auto_run_toggle.isChecked():
-            self.auto_run_toggle.setChecked(False)
+        self.auto_battle_configuration.setEnabled(enabled)
 
     def _add_toggle(self, layout: QVBoxLayout, label: str, checked: bool) -> QCheckBox:
         toggle = ToggleSwitch(label)
@@ -1383,8 +2056,10 @@ class SettingsWindow(QDialog):
                 catch_toggle.setChecked(False)
 
     def _refresh_settings_geometry(self) -> None:
+        self._settings_pages.refreshHeight()
         if (
-            self._last_game_geometry is not None
+            self.isVisible()
+            and self._last_game_geometry is not None
             and self._last_overlay_geometry is not None
         ):
             self.show_at(
@@ -1407,9 +2082,9 @@ class SettingsWindow(QDialog):
     @staticmethod
     def _create_duration_spin(value: float) -> QDoubleSpinBox:
         spin_box = QDoubleSpinBox()
-        spin_box.setRange(0.5, 3600.0)
+        spin_box.setRange(0.1, 3600.0)
         spin_box.setDecimals(1)
-        spin_box.setSingleStep(0.5)
+        spin_box.setSingleStep(0.1)
         spin_box.setSuffix(" s")
         spin_box.setValue(value)
         return spin_box
@@ -1465,26 +2140,22 @@ class SettingsWindow(QDialog):
         item.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(item)
 
-    def show_at(self, game_geometry: QRect, overlay_geometry: QRect) -> None:
+    def show_at(
+        self,
+        game_geometry: QRect,
+        overlay_geometry: QRect,
+        *,
+        activate: bool = False,
+    ) -> None:
+        self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus, not activate)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, not activate)
         self._last_game_geometry = QRect(game_geometry)
         self._last_overlay_geometry = QRect(overlay_geometry)
         self._drag_controller.set_bounds(game_geometry)
         margin = 8
-        self.setFixedWidth(
-            min(self._DEFAULT_WIDTH, max(1, game_geometry.width() - 2 * margin))
-        )
-        content = self.content_scroll_area.widget()
-        content.setMinimumHeight(0)
-        content.setMaximumHeight(16777215)
-        content.adjustSize()
-        content.setMinimumHeight(content.sizeHint().height())
-        self.setMinimumHeight(0)
-        self.content_scroll_area.setMinimumHeight(0)
-        self.content_scroll_area.setMaximumHeight(16777215)
-        self.setMaximumHeight(16777215)
-        self.adjustSize()
-
-        fixed_height = self._fixed_panel_height()
+        width = min(self._DEFAULT_WIDTH, max(1, game_geometry.width() - 2 * margin))
+        self.ensurePolished()
+        fixed_height = self._fixed_panel_height(width)
 
         below_y = overlay_geometry.bottom() + margin
         below_height = game_geometry.bottom() - below_y - margin
@@ -1503,11 +2174,15 @@ class SettingsWindow(QDialog):
         available_height = min(
             560,
             max_game_height,
-            max(fixed_height + 1, available_height),
+            # Keep a complete control reachable in the scroll viewport when
+            # a short game window leaves little room below the overlay.
+            max(fixed_height + self._MINIMUM_CONTENT_HEIGHT, available_height),
         )
-        visible_content_height = max(0, available_height - fixed_height)
-        self.content_scroll_area.setFixedHeight(visible_content_height)
-        self.setFixedHeight(available_height)
+        # Apply the final native size once. The layout allocates the scroll
+        # viewport; fixing its height too creates a conflicting minimum size.
+        self.setFixedSize(width, available_height)
+        self.layout().activate()
+        self._settings_pages.refreshHeight()
 
         x = overlay_geometry.x() + (overlay_geometry.width() - self.width()) // 2
         x = max(
@@ -1525,7 +2200,7 @@ class SettingsWindow(QDialog):
         self.raise_()
         self.visibility_changed.emit(True)
 
-    def _fixed_panel_height(self) -> int:
+    def _fixed_panel_height(self, width: int | None = None) -> int:
         """Measure the header and footer at their real width, including wrapped text."""
         outer_margins = self.layout().contentsMargins()
         panel_layout = self.glass_container.layout()
@@ -1533,7 +2208,7 @@ class SettingsWindow(QDialog):
         frame_width = self.glass_container.frameWidth() * 2
         content_width = max(
             1,
-            self.width()
+            (self.width() if width is None else width)
             - outer_margins.left()
             - outer_margins.right()
             - panel_margins.left()
@@ -1570,7 +2245,7 @@ class SettingsWindow(QDialog):
             launcher_geometry.width(),
             1,
         )
-        self.show_at(bounds, anchor)
+        self.show_at(bounds, anchor, activate=True)
         if not self.property("_overlay_user_moved"):
             self.move(
                 launcher_geometry.center().x() - self.width() // 2,

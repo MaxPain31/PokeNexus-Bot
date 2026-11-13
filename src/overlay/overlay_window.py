@@ -5,7 +5,7 @@ from datetime import date
 from pathlib import Path
 import time
 
-from PySide6.QtCore import QRect, QSize, QThread, QTimer, Qt, QUrl, Signal
+from PySide6.QtCore import QRect, QSize, QThread, QTimer, Qt, QUrl, Signal, Slot
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
     QFrame,
@@ -18,11 +18,14 @@ from PySide6.QtWidgets import (
 )
 
 from capture.game_input import GameInput, region_for_role
+from capture.battle_region_detector import BattleRegionPlacement
+from capture.battle_region_placement_task import BattleRegionPlacementService, BattleRegionPlacementTask
 from capture.fishing_monitor import FishingMonitor
 from capture.region_test_service import RegionTestService
 from capture.region_test_task import RegionTestTask
 from capture.realtime_region_monitor import RealtimeRegionMonitor
 from core.battle_action import (
+    ACTION_BUTTON_STATES,
     ACTION_RETRY_SECONDS,
     BATTLE_ACTION_KEYS,
     PendingBattleAction,
@@ -31,17 +34,25 @@ from core.battle_action import (
 )
 from core.battle_history import BattleHistory
 from core.auto_switch import AutoSwitchController
+from core.special_pokemon_message import (
+    SpecialPokemonMessageController,
+    special_pokemon_message_kind,
+)
 from core.auto_walk import AutoWalkController
 from core.auto_battle import (
     choose_move_slot,
     has_complete_move_set,
+    matches_battle_target,
     move_name_for_slot,
 )
+from core.ev_training import EV_STATS, EVDefeatTracker
 from core.pokemon_rarity import (
     DEFAULT_RARITY_CODE,
     RARITIES,
     load_pokemon_rarity_data,
 )
+from core.pokemon_name import normalise_wild_pokemon_name, pokemon_species_name
+from core.pokemon_targets import match_pokemon_target, parse_pokemon_targets
 from models.region_config import SavedRegion
 from overlay.appearance import apply_overlay_stylesheet, set_background_transparency
 from overlay.battle_log_window import BattleLogWindow
@@ -138,6 +149,11 @@ class OverlayWindow(QWidget):
         self._target_window_id = 0
         self._region_selection_active = False
         self._pending_region_feature: str | None = None
+        self._region_placement_active = False
+        self._region_dialog_active = False
+        self._active_region_placement_task: BattleRegionPlacementTask | None = None
+        self._region_placement_runs: list[tuple[QThread, BattleRegionPlacementTask]] = []
+        self._region_placement_service = BattleRegionPlacementService()
         self.settings_window = SettingsWindow(self)
         self.region_window = RegionWindow(self)
         self.battle_log_window = BattleLogWindow(self)
@@ -183,6 +199,7 @@ class OverlayWindow(QWidget):
         self._auto_battle_input = GameInput()
         self._pending_battle_action: PendingBattleAction | None = None
         self._last_input_completed_at = 0.0
+        self._ev_defeat_tracker = EVDefeatTracker()
         self._auto_walk_controller = AutoWalkController(
             self._auto_battle_input,
             self._log_auto_walk,
@@ -204,9 +221,14 @@ class OverlayWindow(QWidget):
         self._auto_catch_seen_items: set[str] = set()
         self._last_active_pokemon_name: str | None = None
         self._auto_switch_controller = AutoSwitchController()
+        self._special_pokemon_message_controller = SpecialPokemonMessageController()
         self._auto_battle_stopped_for_desired_pokemon: str | None = None
+        self._nature_matched_encounter_identity: str | None = None
         self._current_encounter_name_color = "#4ADE80"
+        self._current_encounter_name: str | None = None
+        self._current_encounter_category: str | None = None
         self._auto_battle_reported: set[tuple[int, str]] = set()
+        self._last_battle_wait_reason: str | None = None
         self._region_test_log_requested = False
         self._window_tracker = GameWindowTracker(self)
         self._window_tracker.window_updated.connect(self._on_target_window_updated)
@@ -216,6 +238,13 @@ class OverlayWindow(QWidget):
         )
         self.settings_window.auto_walk_toggle.toggled.connect(
             self._on_auto_walk_toggled
+        )
+        self.settings_window.auto_walk_configuration_changed.connect(self._sync_auto_walk)
+        self.settings_window.auto_battle_toggle.toggled.connect(
+            self._on_auto_battle_configuration_changed
+        )
+        self.settings_window.auto_battle_configuration_changed.connect(
+            self._on_auto_battle_configuration_changed
         )
         self.settings_window.auto_run_toggle.toggled.connect(
             self._on_auto_run_toggled
@@ -241,6 +270,9 @@ class OverlayWindow(QWidget):
         self.settings_window.show_pokemon_encounter_summary_toggle.toggled.connect(
             self._on_encounter_summary_toggled
         )
+        self.pokemon_encounter_summary_window.preferred_size_changed.connect(
+            self._sync_encounter_summary_window
+        )
         self.region_window.visibility_changed.connect(
             self._on_region_visibility_changed
         )
@@ -251,8 +283,10 @@ class OverlayWindow(QWidget):
         self.region_window.add_region_requested.connect(
             self._begin_region_selection
         )
+        self.region_window.auto_place_requested.connect(self._start_battle_region_placement)
+        self.region_window.battle_regions_reset.connect(self._on_battle_regions_reset)
         self.region_window.naming_dialog_changed.connect(
-            self._window_tracker.set_region_dialog_window
+            self._on_region_dialog_changed
         )
         self.region_window.regions_changed.connect(self._on_regions_updated)
         self.region_window.test_region_requested.connect(
@@ -365,6 +399,7 @@ class OverlayWindow(QWidget):
         self._window_tracker.attach(process_id)
 
     def stop_tracking(self) -> None:
+        self.cancel_battle_region_placement()
         self.stop_realtime_region_capture(
             wait_timeout_ms=5000,
             clear_request=True,
@@ -421,8 +456,10 @@ class OverlayWindow(QWidget):
         self.status_label.setToolTip(description)
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
-        start_enabled = not transitioning and (
-            not running or not self._realtime_capture_requested
+        start_enabled = (
+            not transitioning and (not running or not self._realtime_capture_requested)
+            and not self._region_placement_active and not self._region_dialog_active
+            and not self._region_selection_active
         )
         stop_enabled = (
             running and self._realtime_capture_requested and not transitioning
@@ -475,19 +512,28 @@ class OverlayWindow(QWidget):
         self._apply_visibility()
 
     def _on_tracking_error(self, message: str) -> None:
+        self.cancel_battle_region_placement()
         self.setToolTip(message)
         self._window_tracker.stop()
         self.hide()
         self.tracking_error.emit(message)
 
-    def _on_pokemon_encountered(self, pokemon_name: str) -> None:
+    def _on_pokemon_encountered(
+        self, pokemon_name: str, state: object = None,
+    ) -> None:
+        monitor = self.sender()
+        if isinstance(monitor, RealtimeRegionMonitor) and (
+            monitor is not self._realtime_region_monitor
+            or not self._realtime_capture_requested
+            or monitor.isInterruptionRequested()
+        ):
+            return
+        pokemon_name = pokemon_species_name(pokemon_name)
+        if not pokemon_name:
+            return
         self._reset_daily_encounter_count_if_needed()
-        category = self._classify_encounter(pokemon_name)
-        self._current_encounter_name_color = {
-            "desired": "#A855F7",
-            "shiny": "#FACC15",
-            "elite": "#C0C0C0",
-        }.get(category, "#4ADE80")
+        self._current_encounter_name = pokemon_name
+        self._current_encounter_category = None
         self._pokemon_encounter_count += 1
         rarity_code = self._pokemon_rarity_by_name.get(
             pokemon_name.casefold(),
@@ -502,16 +548,49 @@ class OverlayWindow(QWidget):
         self.pokemon_encounter_summary_window.set_rarity_counts(
             self._pokemon_encounter_rarity_counts
         )
-        self.pokemon_encounter_summary_window.start_encounter(
-            pokemon_name,
-            self._current_encounter_name_color,
-        )
-        if category is not None:
-            self._play_encounter_sound(category)
+        self._refresh_encounter_presentation(pokemon_name, state, new_encounter=True)
         self.encounter_statistics_changed.emit(
             self._pokemon_encounter_count,
             self._pokemon_encounter_date,
         )
+
+    def _on_pokemon_encounter_updated(self, pokemon_name: str, state: object) -> None:
+        monitor = self.sender()
+        if isinstance(monitor, RealtimeRegionMonitor) and (
+            monitor is not self._realtime_region_monitor
+            or not self._realtime_capture_requested
+            or monitor.isInterruptionRequested()
+        ):
+            return
+        if self._current_encounter_name is None:
+            return
+        if self._wild_pokemon_identity(pokemon_name) != self._wild_pokemon_identity(
+            self._current_encounter_name,
+        ):
+            return
+        self._refresh_encounter_presentation(self._current_encounter_name, state)
+
+    def _refresh_encounter_presentation(
+        self, pokemon_name: str, state: object, *, new_encounter: bool = False,
+    ) -> None:
+        category = self._classify_encounter(
+            pokemon_name, state if isinstance(state, dict) else None,
+        )
+        if not new_encounter and category == self._current_encounter_category:
+            return
+        self._current_encounter_category = category
+        self._current_encounter_name_color = {
+            "desired": "#A855F7", "shiny": "#FACC15", "elite": "#C0C0C0",
+        }.get(category, "#4ADE80")
+        display_name = (
+            f"{category.title()} {pokemon_name}" if category in ("shiny", "elite")
+            else pokemon_name
+        )
+        self.pokemon_encounter_summary_window.start_encounter(
+            display_name, self._current_encounter_name_color,
+        )
+        if category is not None:
+            self._play_encounter_sound(category)
 
     def set_encounter_statistics(
         self,
@@ -677,6 +756,7 @@ class OverlayWindow(QWidget):
                 self._window_tracker.set_region_selection_window(None)
                 self.battle_log_window.hide()
                 self._window_tracker.set_battle_log_window(None)
+                self._resume_region_configuration()
                 self._apply_visibility()
                 return
             QToolTip.hideText()
@@ -721,15 +801,154 @@ class OverlayWindow(QWidget):
         self._start_region_tests((region,))
 
     def _on_regions_updated(self, regions: object) -> None:
+        monitor = self._realtime_region_monitor
+        if monitor is not None and not monitor.isInterruptionRequested() and self._target_geometry.isValid():
+            # In-flight frames and scheduled inputs still refer to the old
+            # hitboxes. Wait for a fresh frame from the queued layout instead.
+            self._latest_realtime_state = {}
+            self._auto_run_timer.stop()
+            self._auto_run_pending = False
+            self._auto_walk_controller.stop()
+            if self._auto_fishing_monitor is not None:
+                self._auto_fishing_monitor.set_configuration_paused(True)
+            monitor.update_regions(tuple(regions), self._target_geometry)
+            # Set the cutoff after queuing: even a capture begun while the
+            # configuration request was being queued must not use old hitboxes.
+            self._last_input_completed_at = time.monotonic()
         self.regions_changed.emit(regions)
-        if not self._stop_auto_fishing_monitor(wait_timeout_ms=1000):
-            self.region_test_log_window.append_entry(
-                "WARNING",
-                "Auto Fishing is still finishing its current screen capture; "
-                "the updated region will be used when it stops.",
+        # The fishing monitor already compares its own configuration; changing
+        # an unrelated battle outline must not restart its one-F-per-cycle state.
+        self._sync_auto_fishing_monitor()
+
+    def _on_battle_regions_reset(self) -> None:
+        self.stop_realtime_region_capture(wait_timeout_ms=1000, clear_request=True)
+        self.region_test_log_window.append_entry(
+            "INFO", "Battle regions reset; automation paused. Select regions manually or Auto Place before starting again.",
+        )
+
+    def _on_region_dialog_changed(self, window_id: int) -> None:
+        self._region_dialog_active = bool(window_id)
+        self._window_tracker.set_region_dialog_window(window_id)
+        if self._region_dialog_active:
+            self._pause_region_configuration()
+        else:
+            self._resume_region_configuration()
+
+    def _pause_region_configuration(self) -> None:
+        self._auto_run_timer.stop()
+        self._auto_run_pending = False
+        self._auto_walk_controller.stop()
+        if self._auto_fishing_monitor is not None:
+            self._auto_fishing_monitor.set_configuration_paused(True)
+        self._sync_auto_fishing_monitor()
+        self.set_bot_state(self._bot_running, self._bot_transitioning)
+
+    def _resume_region_configuration(self) -> None:
+        if self._region_placement_active or self._region_dialog_active or self._region_selection_active:
+            return
+        # Never resume with a frame captured behind selection/dialog surfaces or
+        # before a placement result. Encounter counters/timers are not reset.
+        self._last_input_completed_at = time.monotonic()
+        self._latest_realtime_state = {}
+        if self._realtime_capture_requested:
+            self._start_realtime_region_capture()
+        self._sync_auto_fishing_monitor()
+        self.set_bot_state(self._bot_running, self._bot_transitioning)
+
+    def _start_battle_region_placement(self) -> None:
+        if self._region_placement_active or self._region_dialog_active or self._region_selection_active:
+            return
+        if not self._game_window_visible or self._target_window_id <= 0 or not self._target_geometry.isValid():
+            self.region_window.set_placement_status(
+                "The game window must be visible. Enter a battle, then choose Auto Place.", error=True,
             )
             return
-        self._sync_auto_fishing_monitor()
+        if self._bot_transitioning:
+            self.region_window.set_placement_status("Wait for the game to finish starting, then choose Auto Place.", error=True)
+            return
+
+        self._region_placement_active = True
+        self.region_window.set_placement_busy(True)
+        self.region_window.set_placement_status("Detecting the battle panel. Leave the game window in place.")
+        self._pause_region_configuration()
+        self._region_test_log_requested = True
+        self._sync_region_test_log_window(force_show=True)
+        self.region_test_log_window.append_entry("INFO", "Detecting battle regions; no game keys or clicks will be sent.")
+
+        task = BattleRegionPlacementTask(
+            self._region_placement_service, self._target_window_id, self._target_geometry, parent=self,
+        )
+        # As with realtime capture, this worker owns its run() lifecycle. It
+        # does not need the GUI event queue to quit a second thread object.
+        thread = task
+        task.succeeded.connect(self._on_battle_region_placement_succeeded)
+        task.failed.connect(self._on_battle_region_placement_failed)
+        thread.finished.connect(self._on_battle_region_placement_finished)
+        thread.finished.connect(thread.deleteLater)
+        self._region_placement_runs.append((thread, task))
+        self._active_region_placement_task = task
+        thread.start()
+
+    @Slot(object, object)
+    def _on_battle_region_placement_succeeded(self, request_id: object, placement: object) -> None:
+        # The worker may already have been deleteLater'd when this queued
+        # signal arrives. A Python request token survives; QObject.sender()
+        # does not, and would silently discard fast placement results.
+        task = self._active_region_placement_task
+        if task is None or request_id is not task.request_id or not self._region_placement_active:
+            return
+        self._apply_battle_region_placement(placement, task.window_handle, task.game_geometry)
+
+    def _apply_battle_region_placement(
+        self, placement: object, window_handle: int, game_geometry: QRect,
+    ) -> None:
+        if (
+            not self._game_window_visible or window_handle != self._target_window_id
+            or game_geometry != self._target_geometry
+        ):
+            message = "The game window moved, resized or became unavailable. Try Auto Place again; saved regions were not changed."
+            self.region_window.set_placement_status(message, error=True)
+            self.region_test_log_window.append_entry("WARNING", message)
+            return
+        if not isinstance(placement, BattleRegionPlacement):
+            self.region_window.set_placement_status("Invalid battle-placement result; saved regions were not changed.", error=True)
+            return
+        before = len(self.region_window.regions)
+        self.region_window.apply_automatic_regions(placement.regions)
+        self.region_test_log_window.append_entry(
+            "SUCCESS", f"Battle panel detected at X {placement.panel.x()}, Y {placement.panel.y()}, "
+            f"{placement.panel.width()} x {placement.panel.height()} px. "
+            f"Placed {len(self.region_window.regions) - before} missing region(s); saved adjustments were kept.",
+        )
+
+    @Slot(object, str)
+    def _on_battle_region_placement_failed(self, request_id: object, message: str) -> None:
+        task = self._active_region_placement_task
+        if task is None or request_id is not task.request_id or not self._region_placement_active:
+            return
+        self.region_window.set_placement_status(message, error=True)
+        self.region_test_log_window.append_entry("ERROR", message)
+
+    @Slot()
+    def _on_battle_region_placement_finished(self) -> None:
+        thread = self.sender()
+        task = next((task for run_thread, task in self._region_placement_runs if run_thread is thread), None)
+        self._region_placement_runs = [run for run in self._region_placement_runs if run[0] is not thread]
+        if task is None or task is not self._active_region_placement_task:
+            return
+        self._active_region_placement_task = None
+        self._region_placement_active = False
+        self.region_window.set_placement_busy(False)
+        self._resume_region_configuration()
+
+    def cancel_battle_region_placement(self, *, wait: bool = False) -> None:
+        self._active_region_placement_task = None
+        self._region_placement_active = False
+        self.region_window.set_placement_busy(False)
+        for thread, _task in self._region_placement_runs:
+            thread.requestInterruption()
+            if wait:
+                thread.wait()
 
     def _start_fishing_preview(self, region: SavedRegion) -> None:
         if self._target_window_id <= 0 or not self._target_geometry.isValid():
@@ -858,6 +1077,16 @@ class OverlayWindow(QWidget):
                 )
                 return
             return
+        if (
+            getattr(self, "_region_placement_active", False) is True
+            or getattr(self, "_region_dialog_active", False) is True
+            or getattr(self, "_region_selection_active", False) is True
+        ):
+            # Keep the same fishing cycle/latches while configuring battle
+            # regions. Restart only if its own configuration later changes.
+            if self._auto_fishing_monitor is not None:
+                self._auto_fishing_monitor.set_configuration_paused(True)
+            return
         region = next(
             (
                 region
@@ -918,6 +1147,9 @@ class OverlayWindow(QWidget):
         monitor.finished.connect(monitor.deleteLater)
         self._auto_fishing_monitor = monitor
         monitor.set_battle_active(self._fishing_battle_active is not False)
+        monitor.set_configuration_paused(
+            not bool(self._latest_realtime_state) or self._ev_training_complete()
+        )
         self.region_test_log_window.append_entry(
             "INFO", "Auto Fishing is tracking the Fishing Bar region."
         )
@@ -945,6 +1177,11 @@ class OverlayWindow(QWidget):
 
     def _update_fishing_battle_state(self, state: dict[str, object]) -> None:
         battle_mode = state.get("onBattleMode")
+        if (
+            state.get("showingSpecialPokemonMessage", False) is not False
+            or self._special_pokemon_message_controller.blocked
+        ):
+            battle_mode = True
         if battle_mode is True:
             self._fishing_battle_active = True
             self._fishing_non_battle_poll_count = 0
@@ -968,6 +1205,10 @@ class OverlayWindow(QWidget):
             self._auto_fishing_monitor.set_battle_active(
                 self._fishing_battle_active is not False
             )
+            # This is reached only for a fresh frame after region dialogs or
+            # layout changes. Never resume fishing using evidence from before
+            # the pause, or erase its missing-zone/overlap latches to pause it.
+            self._auto_fishing_monitor.set_configuration_paused(self._ev_training_complete())
 
     def _start_region_tests(
         self,
@@ -1019,6 +1260,9 @@ class OverlayWindow(QWidget):
     def _start_realtime_region_capture(self) -> None:
         if (
             not self._realtime_capture_requested
+            or self._region_placement_active
+            or self._region_dialog_active
+            or self._region_selection_active
             or self._realtime_region_monitor is not None
             or self._realtime_monitor_start_attempted
             or self._target_window_id <= 0
@@ -1054,10 +1298,14 @@ class OverlayWindow(QWidget):
             self._target_geometry,
             parent=self,
         )
+        # Auto Place may have been run while Moves was already open. Recover
+        # that menu only from fresh move/PP evidence, never from old hitboxes.
+        monitor.update_regions(regions, self._target_geometry)
         monitor.log_message.connect(self.region_test_log_window.append_entry)
         monitor.state_updated.connect(self._on_realtime_state_updated)
         monitor.chat_message.connect(self._append_battle_chat_message)
         monitor.pokemon_encountered.connect(self._on_pokemon_encountered)
+        monitor.pokemon_encounter_updated.connect(self._on_pokemon_encounter_updated)
         monitor.finished.connect(
             lambda monitor=monitor: self._on_realtime_monitor_finished(monitor)
         )
@@ -1088,12 +1336,42 @@ class OverlayWindow(QWidget):
         if isinstance(frame_at, (int, float)) and frame_at <= self._last_input_completed_at:
             return
         self._latest_realtime_state = state
+        # A queued Run belongs to the previous frame. Only the full priority
+        # checks below may schedule it again from this new observation.
+        self._cancel_queued_auto_run()
+        if (
+            getattr(self, "_region_placement_active", False) is True
+            or getattr(self, "_region_dialog_active", False) is True
+            or getattr(self, "_region_selection_active", False) is True
+        ):
+            self._ev_defeat_tracker.pause()
+            return
         self._update_fishing_battle_state(state)
+        self.region_window.update_synchronize_state(state)
+        if self._handle_special_pokemon_message(state):
+            self._ev_defeat_tracker.pause()
+            return
         self._update_battle_move_history(state)
+        self._update_ev_training_progress(state)
+        self._update_encounter_nature_match(state)
+        # Movement must start/stop even when battle actions are awaiting a
+        # response or their button OCR is unreadable.
+        self._sync_auto_walk()
 
+        if self._awaiting_target_nature_match(state):
+            self._auto_run_timer.stop()
+            self._auto_run_pending = False
+            self._log_battle_wait(
+                "readable Synchronize evidence for an S-only target. "
+                "Keep the green S in the Wild Pokemon region or add a Nature Match region.",
+            )
+            return
         if self._update_pending_battle_action(state):
+            if state.get("clickStateReliable") is False:
+                self._log_battle_wait("readable region OCR before checking the last action.")
             return
         if state.get("clickStateReliable") is False:
+            self._log_battle_wait("readable region OCR before sending an action.")
             return
 
         turn = state.get("turn")
@@ -1110,27 +1388,8 @@ class OverlayWindow(QWidget):
             state,
             faint_confirmed=self._is_player_faint_confirmed(state),
         ):
+            self._log_battle_wait("Auto Switch to finish selecting a replacement Pokemon.")
             return
-
-        self._auto_walk_controller.update(
-            enabled=(
-                self.settings_window.auto_walk_toggle.isChecked()
-                and self._realtime_capture_requested
-            ),
-            on_battle_mode=state.get("onBattleMode"),
-            window_handle=self._target_window_id,
-            direction=self.settings_window.auto_walk_direction_selection.currentText(),
-            duration_mode=(
-                self.settings_window.auto_walk_duration_mode_selection.currentText()
-            ),
-            default_seconds=self.settings_window.auto_walk_duration_spin.value(),
-            minimum_seconds=(
-                self.settings_window.auto_walk_min_duration_spin.value()
-            ),
-            maximum_seconds=(
-                self.settings_window.auto_walk_max_duration_spin.value()
-            ),
-        )
 
         should_prioritize_catching = (
             self.settings_window.auto_catching_toggle.isChecked()
@@ -1141,6 +1400,7 @@ class OverlayWindow(QWidget):
             )
         )
         if should_prioritize_catching and self._handle_auto_catching(state):
+            self._log_battle_wait("Auto Catching to finish handling this encounter.")
             return
 
         if state.get("onBattleMode") is not True:
@@ -1153,10 +1413,17 @@ class OverlayWindow(QWidget):
             self._reset_auto_switch_state()
             self._auto_battle_stopped_for_desired_pokemon = None
             self._auto_battle_reported.clear()
+            self._log_battle_wait(
+                self.settings_window.ev_training_status.text() if self._ev_training_complete()
+                else "battle detection (onBattleMode is not true)."
+            )
             return
 
-        if self.settings_window.auto_run_toggle.isChecked():
-            self._handle_auto_run(state)
+        if self._ev_training_complete():
+            self._log_battle_wait(self.settings_window.ev_training_status.text())
+            return
+        if self._ev_training_enabled() and self._ev_defeat_tracker.awaiting_next_encounter:
+            self._log_battle_wait("EV training to observe the next living opponent after this battle.")
             return
 
         wild_pokemon_name = state.get("wildPokemonName")
@@ -1185,10 +1452,15 @@ class OverlayWindow(QWidget):
             self._auto_battle_stopped_for_desired_pokemon = (
                 matched_desired_name.casefold()
             )
+            synchronized = self._selected_target_requires_nature_match(
+                self.settings_window.desired_pokemon_input.text(), matched_desired_name,
+            )
             self.region_test_log_window.append_entry(
                 "INFO",
                 f"Auto Battle stopped for this encounter: "
-                f"wild {matched_desired_name} detected. "
+                f"wild {matched_desired_name}"
+                + (" with green S (Synchronize)" if synchronized else "")
+                + " detected. "
                 "Auto Battle will resume for the next encounter.",
             )
             return
@@ -1203,25 +1475,44 @@ class OverlayWindow(QWidget):
             return
         if stop_for_elite:
             self._auto_battle_stopped_for_desired_pokemon = wild_pokemon_identity
+            synchronized = self._selected_target_requires_nature_match(
+                self.settings_window.elite_pokemon_input.text(), wild_pokemon_identity,
+            )
             self.region_test_log_window.append_entry(
                 "INFO",
                 "Auto Battle stopped for this encounter: Elite wild Pokemon "
-                "detected. Auto Battle will resume for the next encounter.",
+                + ("with green S (Synchronize) " if synchronized else "")
+                + "detected. Auto Battle will resume for the next encounter.",
             )
             return
 
-        if not self.settings_window.auto_battle_toggle.isChecked():
+        battle_target = self._auto_battle_target_matches(state)
+        if battle_target is None:
+            self._log_battle_wait(
+                "a readable wild Pokemon name and Elite status for the Auto Battle target filters."
+            )
+            return
+        if not battle_target:
+            if self._auto_run_enabled():
+                self._handle_auto_run(state)
+            elif self.settings_window.auto_battle_toggle.isChecked():
+                self._log_battle_wait(
+                    "a Pokemon matching the Auto Battle configuration; Auto Run is off."
+                )
             return
 
         turn = state.get("turn")
         if not isinstance(turn, int) or isinstance(turn, bool):
+            self._log_battle_wait("a readable turn number in the Turn Button region.")
             return
         if self._auto_battle_move_clicked:
+            self._log_battle_wait("the next turn after the last move.")
             return
 
         if state.get("clickedFightButton") is True and not action_menu_visible(state):
             moves_text = state.get("pokemonMoves")
             if not isinstance(moves_text, str):
+                self._log_battle_wait("readable move names and PP in the move regions.")
                 return
             if not has_complete_move_set(moves_text):
                 self._auto_battle_log_once(
@@ -1282,6 +1573,7 @@ class OverlayWindow(QWidget):
                 "clickedRunButton",
             )
         ):
+            self._log_battle_wait("the main battle menu to return from the current action.")
             return
 
         if self._auto_battle_fight_clicked or not all(
@@ -1293,11 +1585,247 @@ class OverlayWindow(QWidget):
                 "showingBagButton",
             )
         ):
+            buttons = ", ".join(
+                f"{feature.title()}={state.get(visible)}"
+                for feature, (_clicked, visible) in ACTION_BUTTON_STATES.items()
+            )
+            self._log_battle_wait(f"the main battle menu ({buttons}).")
             return
 
         self._submit_battle_action("fight", turn, "Fight Button")
 
+    def _handle_special_pokemon_message(self, state: dict[str, object]) -> bool:
+        if (
+            getattr(self, "_region_placement_active", False) is True
+            or getattr(self, "_region_dialog_active", False) is True
+            or getattr(self, "_region_selection_active", False) is True
+        ):
+            return True
+        frame_at = state.get("captureStartedAt")
+        controller = self._special_pokemon_message_controller
+        auto_close = self.settings_window.auto_close_special_pokemon_message_toggle.isChecked()
+        decision = controller.update(
+            enabled=self._realtime_capture_requested,
+            visible=state.get("showingSpecialPokemonMessage", False),
+            frame_at=(
+                float(frame_at) if isinstance(frame_at, (int, float)) else time.monotonic()
+            ),
+        )
+        if decision.detected:
+            # The modal intercepts battle input. Re-evaluate the battle menu
+            # after closing it instead of completing an interrupted action.
+            attempt = self._pending_battle_action
+            if attempt is not None:
+                if attempt.automation_name == "Auto Catching":
+                    self._auto_catch_phase = "ready"
+                elif attempt.automation_name == "Auto Switch":
+                    slot = int(attempt.action_name.rsplit(" ", 1)[1])
+                    self._auto_switch_controller.record_click(
+                        slot, attempt.turn, succeeded=False,
+                    )
+            self._pending_battle_action = None
+            self._pending_battle_move = None
+            self._auto_battle_fight_clicked = False
+            self._auto_battle_move_clicked = False
+            self._auto_run_clicked = False
+            message = state.get("specialPokemonMessage")
+            kind = special_pokemon_message_kind(message) if isinstance(message, str) else None
+            self.region_test_log_window.append_entry(
+                "INFO",
+                "Special Pokemon Message detected"
+                + (f" ({kind})" if kind else "")
+                + (
+                    "; closing it before battle actions."
+                    if auto_close
+                    else "; auto-close is off; waiting for the popup to close."
+                ),
+            )
+        if decision.dismissed:
+            self.region_test_log_window.append_entry(
+                "INFO", "Special Pokemon Message dismissal confirmed from the game response.",
+            )
+        if not decision.handled:
+            return False
+
+        self._sync_auto_walk()
+        self._auto_run_timer.stop()
+        self._auto_run_pending = False
+        if not auto_close or not decision.click_close:
+            self._log_battle_wait(
+                "Special Pokemon Message OCR to become readable."
+                if state.get("showingSpecialPokemonMessage", False) is None
+                else "Special Pokemon Message dismissal."
+            )
+            return True
+
+        region = region_for_role(
+            tuple(self.region_window.regions), "special-pokemon-message", "Close Button",
+        )
+        try:
+            if region is None:
+                self._auto_battle_log_once(
+                    -1, "missing-special-pokemon-close-region",
+                    "Special Pokemon Message requires its Close Button region. "
+                    "Add it in Region Overlay to dismiss the popup automatically.",
+                )
+                return True
+            if self._target_window_id <= 0 or not self._target_geometry.isValid():
+                raise RuntimeError("The game window is unavailable.")
+            # This modal has a dedicated close target, including when ordinary
+            # battle actions use number keys. GameInput keeps its usual guards.
+            self._auto_battle_input.click_region(
+                self._target_window_id, region, self._target_geometry,
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            self._auto_battle_log_once(
+                -1, "special-pokemon-close-failed",
+                f"Special Pokemon Message could not click Close Button: {error}",
+            )
+            return True
+        finally:
+            completed_at = time.monotonic()
+            controller.record_attempt(completed_at)
+
+        self._last_input_completed_at = completed_at
+        self.region_test_log_window.append_entry(
+            "INFO", "Special Pokemon Message clicked Close Button; waiting for the popup to disappear.",
+        )
+        return True
+
+    def _auto_battle_target_matches(self, state: dict[str, object]) -> bool | None:
+        """Resolve target eligibility without treating missing OCR as a mismatch."""
+        settings = self.settings_window
+        if not settings.auto_battle_toggle.isChecked():
+            return False
+        mode = settings.auto_battle_mode_selection.currentText()
+        if mode == "Default":
+            return True
+        if mode == "Specific Only":
+            return matches_battle_target(
+                state.get("wildPokemonName"), settings.specific_pokemon_input.text(),
+                elite_only=settings.auto_battle_elite_only_toggle.isChecked(),
+                is_elite=state.get("wildPokemonIsElite"),
+            )
+        if mode == "EV Training Only":
+            pokemon = state.get("wildPokemonName")
+            if not any(character.isalpha() for character in pokemon_species_name(pokemon)):
+                return None
+            selected = matches_battle_target(pokemon, settings.ev_training_pokemon_input.text())
+            if selected is not True:
+                return selected
+            yields = settings.ev_training_yield(pokemon)
+            return settings.ev_training_progress().fits(yields) if yields is not None else None
+        return None
+
+    def _ev_training_enabled(self) -> bool:
+        return (
+            self.settings_window.auto_battle_toggle.isChecked()
+            and self.settings_window.auto_battle_mode_selection.currentText() == "EV Training Only"
+        )
+
+    def _ev_training_complete(self) -> bool:
+        return self._ev_training_enabled() and self.settings_window.ev_training_progress().complete
+
+    def _ev_training_actions_paused(self) -> bool:
+        return self._ev_training_enabled() and (
+            self.settings_window.ev_training_progress().complete
+            or self._ev_defeat_tracker.awaiting_next_encounter
+        )
+
+    def _auto_run_enabled(self) -> bool:
+        # Running from an oversized/unwanted yield is part of EV Training.
+        return self.settings_window.auto_run_toggle.isChecked() or self._ev_training_enabled()
+
+    def _update_ev_training_progress(self, state: dict[str, object]) -> None:
+        frame_at = state.get("captureStartedAt")
+        defeated = self._ev_defeat_tracker.observe(
+            state, enabled=self._realtime_capture_requested and self._ev_training_enabled(),
+            frame_at=float(frame_at) if isinstance(frame_at, (int, float)) else time.monotonic(),
+        )
+        if defeated is not None:
+            yields = self.settings_window.ev_training_yield(defeated)
+            if yields is None:
+                self.region_test_log_window.append_entry(
+                    "WARNING", f"EV Training could not account for {defeated}: no unambiguous catalog yield.",
+                )
+            else:
+                before = self.settings_window.ev_training_progress()
+                progress = before.after_defeat(yields)
+                if progress != before:
+                    self.settings_window.set_ev_training_progress(progress.current, progress.targets)
+                    gains = ", ".join(
+                        f"+{progress.current[key] - before.current[key]} {label}"
+                        for key, label, _category in EV_STATS if progress.current[key] != before.current[key]
+                    )
+                    self.region_test_log_window.append_entry(
+                        "SUCCESS", f"EV Training: {defeated} defeated — {gains}. "
+                        f"Current total: {progress.total}/510 EVs.",
+                    )
+        if self._ev_training_actions_paused():
+            self._cancel_queued_auto_run()
+            self._auto_battle_turn = None
+            self._auto_battle_fight_clicked = False
+            self._auto_battle_move_clicked = False
+            self._auto_run_clicked = False
+            attempt = self._pending_battle_action
+            if attempt is not None and attempt.automation_name in ("Auto Battle", "Auto Run"):
+                self._cancel_pending_battle_action()
+        if self._ev_training_complete() and self._auto_fishing_monitor is not None:
+            self._auto_fishing_monitor.set_configuration_paused(True)
+
+    def _cancel_queued_auto_run(self) -> None:
+        self._auto_run_timer.stop()
+        self._auto_run_pending = False
+
+    def _on_auto_battle_configuration_changed(self, *_args) -> None:
+        # Editing settings never sends input. Re-route on the next fresh frame,
+        # and discard an obsolete Fight/Move/Run retry immediately.
+        self._cancel_queued_auto_run()
+        if self._ev_training_complete():
+            self._auto_walk_controller.stop()
+            if self._auto_fishing_monitor is not None:
+                self._auto_fishing_monitor.set_configuration_paused(True)
+        attempt = self._pending_battle_action
+        if attempt is None or attempt.automation_name not in ("Auto Battle", "Auto Run"):
+            return
+        target = self._auto_battle_target_matches(self._latest_realtime_state)
+        if self._ev_training_actions_paused() or (
+            attempt.automation_name == "Auto Battle" and target is False
+        ) or (
+            attempt.automation_name == "Auto Run" and (target is True or not self._auto_run_enabled())
+        ):
+            self._cancel_pending_battle_action()
+
+    def _auto_run_allowed(self, state: dict[str, object]) -> bool:
+        settings = self.settings_window
+        if (
+            not self._auto_run_enabled()
+            or self._ev_training_actions_paused()
+            or self._auto_battle_target_matches(state) is not False
+            or state.get("clickStateReliable") is False
+            or self._special_pokemon_message_controller.blocked
+            or self._awaiting_target_nature_match(state)
+            or (settings.auto_catching_toggle.isChecked() and self._auto_catch_phase != "idle")
+        ):
+            return False
+        if settings.auto_switch_fainted_pokemon_toggle.isChecked() and (
+            state.get("yourPokemonHealth") == 0
+            or (state.get("yourPokemonHealth") is None and self._is_player_faint_confirmed(state))
+        ):
+            return False
+        stopped = self._auto_battle_stopped_for_desired_pokemon
+        identity = self._wild_pokemon_identity(state.get("wildPokemonName"))
+        if stopped is not None and (not identity or identity == stopped):
+            return False
+        frame_at = state.get("captureStartedAt")
+        return not (
+            isinstance(frame_at, (int, float)) and frame_at <= self._last_input_completed_at
+        )
+
     def _handle_auto_run(self, state: dict[str, object]) -> None:
+        if not self._auto_run_allowed(state):
+            self._cancel_queued_auto_run()
+            return
         if action_menu_visible(state) and not self._is_stop_battle_encounter(state):
             self._auto_run_clicked = False
         if self._auto_run_clicked or state.get("clickedRunButton") is True:
@@ -1308,6 +1836,7 @@ class OverlayWindow(QWidget):
             return
 
         if not self._auto_run_ready(state):
+            self._log_battle_wait("a readable turn number and Run button for Auto Run.")
             return
 
         if not self._auto_run_pending:
@@ -1487,6 +2016,8 @@ class OverlayWindow(QWidget):
             self._auto_catch_seen_items.clear()
 
     def _auto_catch_has_new_catch_confirmation(self, chat_snapshot: str) -> bool:
+        if not RealtimeRegionMonitor._chat_confirms_catch(chat_snapshot):
+            return False
         confirmation_pattern = re.compile(
             r"congratulations,\s*you\s+caught\s+the\s+opposing\s+"
             r"([^.!?\r\n]+)",
@@ -1527,7 +2058,9 @@ class OverlayWindow(QWidget):
                     "Pokemon are selected.",
                 )
             filters.append(
-                bool(self._match_selected_pokemon_name(wild_name, selected_names))
+                bool(self._match_selected_pokemon_name(
+                    wild_name, selected_names, nature_match=self._encounter_nature_match(state),
+                ))
             )
         if (
             self.settings_window.stop_for_shiny_toggle.isChecked()
@@ -1539,16 +2072,15 @@ class OverlayWindow(QWidget):
             and self.settings_window.auto_catching_elite_toggle.isChecked()
         ):
             is_elite = state.get("wildPokemonIsElite") is True
-            selected_names = {
-                name.strip().casefold()
-                for name in self.settings_window.elite_pokemon_input.text().split(",")
-                if name.strip()
-            }
+            selected_names = self.settings_window.elite_pokemon_input.text()
             filters.append(
                 is_elite
                 and (
-                    not selected_names
-                    or self._wild_pokemon_identity(wild_name) in selected_names
+                    not parse_pokemon_targets(selected_names)
+                    or match_pokemon_target(
+                        wild_name, selected_names,
+                        nature_match=self._encounter_nature_match(state), exact_species=True,
+                    ) is not None
                 )
             )
         return any(filters) if filters else True
@@ -1567,16 +2099,75 @@ class OverlayWindow(QWidget):
     def _match_selected_pokemon_name(
         wild_name: str,
         selected_names: str,
+        *,
+        nature_match: object = False,
     ) -> str | None:
-        for desired_name in selected_names.split(","):
-            normalized_desired_name = desired_name.strip().casefold()
-            if normalized_desired_name and re.search(
-                rf"(?<!\w){re.escape(normalized_desired_name)}(?!\w)",
-                wild_name,
-                re.IGNORECASE,
-            ):
-                return normalized_desired_name
-        return None
+        target = match_pokemon_target(wild_name, selected_names, nature_match=nature_match)
+        return target.name.casefold() if target is not None else None
+
+    @staticmethod
+    def _selected_target_requires_nature_match(selected_names: str, species: str) -> bool:
+        return any(
+            target.nature_match_only and target.name.casefold() == species.casefold()
+            for target in parse_pokemon_targets(selected_names)
+        )
+
+    def _update_encounter_nature_match(self, state: dict[str, object]) -> None:
+        if state.get("onBattleMode") is not True:
+            if self._fishing_battle_active is False:
+                self._nature_matched_encounter_identity = None
+            return
+        identity = self._wild_pokemon_identity(state.get("wildPokemonName"))
+        if identity and identity != self._nature_matched_encounter_identity:
+            self._nature_matched_encounter_identity = None
+        if identity and state.get("wildPokemonNatureMatch") is True:
+            # Detection remains live in the monitor and Region Overlay. Once
+            # proven, a target stays protected for this encounter even if a
+            # fainted replacement or manual switch removes the green S.
+            self._nature_matched_encounter_identity = identity
+
+    def _encounter_nature_match(self, state: dict[str, object]) -> bool | None:
+        if (
+            state.get("onBattleMode") is True
+            and self._nature_matched_encounter_identity
+            and self._wild_pokemon_identity(state.get("wildPokemonName"))
+            == self._nature_matched_encounter_identity
+        ):
+            return True
+        evidence = state.get("wildPokemonNatureMatch")
+        return evidence if type(evidence) is bool else None
+
+    def _awaiting_target_nature_match(self, state: dict[str, object]) -> bool:
+        if state.get("onBattleMode") is not True or self._encounter_nature_match(state) is not None:
+            return False
+        wild_name = state.get("wildPokemonName")
+        for enabled, selected_names, exact_species in (
+            (
+                self.settings_window.stop_for_desired_pokemon_toggle.isChecked(),
+                self.settings_window.desired_pokemon_input.text(), False,
+            ),
+            (
+                self.settings_window.stop_for_elite_toggle.isChecked()
+                and state.get("wildPokemonIsElite") is True,
+                self.settings_window.elite_pokemon_input.text(), True,
+            ),
+        ):
+            if not enabled:
+                continue
+            if not self._wild_pokemon_identity(wild_name):
+                if any(target.nature_match_only for target in parse_pokemon_targets(selected_names)):
+                    return True
+            else:
+                if match_pokemon_target(
+                    wild_name, selected_names, nature_match=False, exact_species=exact_species,
+                ) is not None:
+                    continue
+                possible_target = match_pokemon_target(
+                    wild_name, selected_names, nature_match=True, exact_species=exact_species,
+                )
+                if possible_target is not None and possible_target.nature_match_only:
+                    return True
+        return False
 
     @staticmethod
     def _normalise_item_name(name: str) -> str:
@@ -1600,14 +2191,29 @@ class OverlayWindow(QWidget):
     ) -> bool:
         matched_name = self._matched_desired_pokemon(state)
         if matched_name is not None:
-            reason = f"wild {matched_name} detected"
+            synchronized = self._selected_target_requires_nature_match(
+                self.settings_window.desired_pokemon_input.text(), matched_name,
+            )
+            reason = (
+                f"wild {matched_name}"
+                + (" with green S (Synchronize)" if synchronized else "")
+                + " detected"
+            )
         elif (
             self.settings_window.stop_for_shiny_toggle.isChecked()
             and state.get("wildPokemonIsShiny") is True
         ):
             reason = "shiny wild Pokemon detected"
         elif self._should_stop_for_elite_pokemon(state):
-            reason = "Elite wild Pokemon detected"
+            synchronized = self._selected_target_requires_nature_match(
+                self.settings_window.elite_pokemon_input.text(),
+                self._wild_pokemon_identity(state.get("wildPokemonName")),
+            )
+            reason = (
+                "Elite wild Pokemon "
+                + ("with green S (Synchronize) " if synchronized else "")
+                + "detected"
+            )
         else:
             return False
 
@@ -1622,10 +2228,14 @@ class OverlayWindow(QWidget):
         return True
 
     def _click_auto_run(self) -> None:
-        self._auto_run_pending = False
+        was_pending = self._auto_run_pending
+        self._cancel_queued_auto_run()
         state = self._latest_realtime_state
         if (
-            not self.settings_window.auto_run_toggle.isChecked()
+            not was_pending
+            or not self._realtime_capture_requested
+            or self._pending_battle_action is not None
+            or not self._auto_run_allowed(state)
             or state.get("clickedRunButton") is True
             or not self._auto_run_ready(state)
         ):
@@ -1647,6 +2257,7 @@ class OverlayWindow(QWidget):
         turn = state.get("turn")
         return (
             state.get("onBattleMode") is True
+            and state.get("showingSpecialPokemonMessage", False) is False
             and isinstance(turn, int)
             and not isinstance(turn, bool)
             and turn >= 1
@@ -1654,9 +2265,11 @@ class OverlayWindow(QWidget):
         )
 
     def _on_auto_run_toggled(self, enabled: bool) -> None:
-        if not enabled:
-            self._auto_run_timer.stop()
-            self._auto_run_pending = False
+        if not enabled and not self._auto_run_enabled():
+            self._cancel_queued_auto_run()
+            attempt = self._pending_battle_action
+            if attempt is not None and attempt.automation_name == "Auto Run":
+                self._cancel_pending_battle_action()
 
     def _matched_desired_pokemon(
         self,
@@ -1668,15 +2281,10 @@ class OverlayWindow(QWidget):
         normalised_wild_name = self._normalise_wild_pokemon_name(
             state.get("wildPokemonName")
         )
-        for desired_name in self.settings_window.desired_pokemon_input.text().split(","):
-            normalized_desired_name = desired_name.strip().casefold()
-            if normalized_desired_name and re.search(
-                rf"(?<!\w){re.escape(normalized_desired_name)}(?!\w)",
-                normalised_wild_name,
-                re.IGNORECASE,
-            ):
-                return normalized_desired_name
-        return None
+        return self._match_selected_pokemon_name(
+            normalised_wild_name, self.settings_window.desired_pokemon_input.text(),
+            nature_match=self._encounter_nature_match(state),
+        )
 
     def _should_stop_for_elite_pokemon(
         self,
@@ -1688,19 +2296,17 @@ class OverlayWindow(QWidget):
         ):
             return False
 
-        selected_names = {
-            name.strip().casefold()
-            for name in self.settings_window.elite_pokemon_input.text().split(",")
-            if name.strip()
-        }
-        if not selected_names:
+        selected_names = self.settings_window.elite_pokemon_input.text()
+        if not parse_pokemon_targets(selected_names):
             return True
 
         wild_name = self._normalise_wild_pokemon_name(
             state.get("wildPokemonName")
         )
-        wild_identity = self._wild_pokemon_identity(wild_name)
-        return wild_identity in selected_names
+        return match_pokemon_target(
+            wild_name, selected_names, nature_match=self._encounter_nature_match(state),
+            exact_species=True,
+        ) is not None
 
     def _is_player_faint_confirmed(self, state: dict[str, object]) -> bool:
         if state.get("onBattleMode") is not True:
@@ -1793,6 +2399,7 @@ class OverlayWindow(QWidget):
             settle_delay=settle_delay,
         ):
             return False
+        self._last_battle_wait_reason = None
         self._pending_battle_action = PendingBattleAction(
             feature, turn, action_name, automation_name, self._last_input_completed_at,
             dict(self._latest_realtime_state), settle_delay,
@@ -1808,6 +2415,12 @@ class OverlayWindow(QWidget):
         automation_name: str,
         settle_delay: float | None,
     ) -> bool:
+        if (
+            getattr(self, "_region_placement_active", False) is True
+            or getattr(self, "_region_dialog_active", False) is True
+            or getattr(self, "_region_selection_active", False) is True
+        ):
+            return False
         display_turn = turn if turn is not None else -1
         use_mouse = self.settings_window.use_mouse_clicking_toggle.isChecked()
         number_key = BATTLE_ACTION_KEYS.get((feature, action_name.casefold()))
@@ -1863,6 +2476,8 @@ class OverlayWindow(QWidget):
             return False
 
         self._last_input_completed_at = time.monotonic()
+        if self._ev_training_enabled():
+            self._ev_defeat_tracker.record_action(feature, action_name)
         monitor = self._realtime_region_monitor
         if monitor is not None and monitor.window_handle == self._target_window_id:
             monitor.record_automated_action(feature, action_name)
@@ -1884,10 +2499,20 @@ class OverlayWindow(QWidget):
             "Auto Catching": self.settings_window.auto_catching_toggle,
             "Auto Switch": self.settings_window.auto_switch_fainted_pokemon_toggle,
         }[attempt.automation_name].isChecked()
+        if attempt.automation_name == "Auto Run":
+            enabled = self._auto_run_enabled()
+        if attempt.automation_name in ("Auto Battle", "Auto Run") and self._ev_training_actions_paused():
+            enabled = False
         stopped_encounter = (
             attempt.automation_name in ("Auto Battle", "Auto Run")
             and state.get("onBattleMode") is True
-            and self._is_stop_battle_encounter(state)
+            and (
+                self._is_stop_battle_encounter(state)
+                or (
+                    self.settings_window.auto_catching_toggle.isChecked()
+                    and self._auto_catch_phase != "idle"
+                )
+            )
         )
         needs_switch = (
             attempt.feature != "pokemon-team"
@@ -1904,6 +2529,22 @@ class OverlayWindow(QWidget):
         if not enabled or stopped_encounter or needs_switch:
             outcome = "cancelled"
         else:
+            target = (
+                self._auto_battle_target_matches(state)
+                if state.get("onBattleMode") is True
+                and attempt.automation_name in ("Auto Battle", "Auto Run")
+                else True
+            )
+            if target is None:
+                self._log_battle_wait("readable Auto Battle target evidence before retrying the last action.")
+                return True
+            obsolete = state.get("onBattleMode") is True and (
+                (attempt.automation_name == "Auto Battle" and target is False)
+                or (attempt.automation_name == "Auto Run" and target is True)
+            )
+            if obsolete:
+                self._cancel_pending_battle_action()
+                return False
             frame_at = state.get("captureStartedAt")
             outcome = attempt.observe(
                 state,
@@ -1935,15 +2576,12 @@ class OverlayWindow(QWidget):
                 attempt.last_attempted_at = time.monotonic()
             return True
 
-        self._pending_battle_action = None
         role = attempt.action_name.casefold()
         if outcome == "cancelled":
-            if attempt.feature == "moves":
-                self._pending_battle_move = None
-            if attempt.automation_name == "Auto Catching":
-                self._auto_catch_phase = "ready"
+            self._cancel_pending_battle_action()
             return False
 
+        self._pending_battle_action = None
         turn_message = f" on turn {attempt.turn}" if attempt.turn is not None else ""
         self.region_test_log_window.append_entry(
             "INFO", f"{attempt.automation_name} confirmed {attempt.action_name}"
@@ -1965,10 +2603,21 @@ class OverlayWindow(QWidget):
             self._auto_switch_controller.record_click(slot, attempt.turn, succeeded=True)
         return False
 
+    def _cancel_pending_battle_action(self) -> None:
+        attempt = self._pending_battle_action
+        self._pending_battle_action = None
+        if attempt is not None:
+            if attempt.feature == "moves":
+                self._pending_battle_move = None
+            if attempt.automation_name == "Auto Catching":
+                self._auto_catch_phase = "ready"
+
     def _reset_battle_actions(self) -> None:
         self._pending_battle_action = None
         self._last_input_completed_at = 0.0
+        self._ev_defeat_tracker.reset()
         self._latest_realtime_state = {}
+        self.region_window.update_synchronize_state({})
         self._pending_battle_move = None
         self._auto_battle_turn = None
         self._auto_battle_fight_clicked = False
@@ -1977,9 +2626,28 @@ class OverlayWindow(QWidget):
         self._auto_run_pending = False
         self._auto_run_clicked = False
         self._auto_battle_stopped_for_desired_pokemon = None
+        self._nature_matched_encounter_identity = None
         self._auto_battle_reported.clear()
+        self._last_battle_wait_reason = None
         self._reset_auto_catching_state()
         self._reset_auto_switch_state()
+        self._special_pokemon_message_controller.reset()
+        self._current_encounter_name = None
+        self._current_encounter_category = None
+
+    def _log_battle_wait(self, reason: str) -> None:
+        if not any(toggle.isChecked() for toggle in (
+            self.settings_window.auto_battle_toggle,
+            self.settings_window.auto_run_toggle,
+            self.settings_window.auto_catching_toggle,
+            self.settings_window.auto_switch_fainted_pokemon_toggle,
+        )):
+            self._last_battle_wait_reason = None
+            return
+        if reason == self._last_battle_wait_reason:
+            return
+        self._last_battle_wait_reason = reason
+        self.region_test_log_window.append_entry("INFO", f"Battle automation waiting: {reason}")
 
     def _auto_battle_log_once(
         self,
@@ -2095,12 +2763,17 @@ class OverlayWindow(QWidget):
         ]
 
     def _begin_region_selection(self, feature: str) -> None:
+        if self._region_placement_active or self._region_dialog_active or self._region_selection_active:
+            return
         if not self._game_window_visible or not self._target_geometry.isValid():
             return
 
         self._pending_region_feature = feature
         self._region_selection_active = True
+        self._pause_region_configuration()
         self._apply_visibility()
+        if not self._region_selection_active:
+            return
         self._window_tracker.set_region_selection_window(
             int(self.region_selector.winId())
         )
@@ -2108,9 +2781,15 @@ class OverlayWindow(QWidget):
 
     def _on_region_selection_completed(self, geometry: QRect) -> None:
         feature = self._pending_region_feature
-        self._restore_after_region_selection()
-        if feature is not None and self._game_window_visible:
-            self.region_window.prompt_region_name(feature, geometry)
+        self.region_selector.hide()
+        self._window_tracker.set_region_selection_window(None)
+        # Keep input paused continuously from drawing through role assignment.
+        # The dialog's closing signal must not resume the old capture layout.
+        try:
+            if feature is not None and self._game_window_visible:
+                self.region_window.prompt_region_name(feature, geometry)
+        finally:
+            self._restore_after_region_selection()
 
     def _on_region_selection_cancelled(self) -> None:
         self._restore_after_region_selection()
@@ -2118,7 +2797,9 @@ class OverlayWindow(QWidget):
     def _restore_after_region_selection(self) -> None:
         self._region_selection_active = False
         self._pending_region_feature = None
+        self.region_selector.hide()
         self._window_tracker.set_region_selection_window(None)
+        self._resume_region_configuration()
         self._apply_visibility()
 
     def _sync_region_window(self) -> None:
@@ -2175,7 +2856,11 @@ class OverlayWindow(QWidget):
         self._sync_region_window()
 
     def _on_play(self) -> None:
-        if self._bot_transitioning or self._realtime_capture_requested:
+        if (
+            self._bot_transitioning or self._realtime_capture_requested
+            or self._region_placement_active or self._region_dialog_active
+            or self._region_selection_active
+        ):
             return
         self.pokemon_encounter_summary_window.start_session_timer()
         self._realtime_capture_requested = True
@@ -2192,11 +2877,59 @@ class OverlayWindow(QWidget):
             )
 
     def _on_auto_walk_toggled(self, enabled: bool) -> None:
-        if not enabled:
-            self._auto_walk_controller.stop()
+        del enabled
+        self._sync_auto_walk()
 
-    def _classify_encounter(self, pokemon_name: str) -> str | None:
+    def _sync_auto_walk(self) -> None:
         state = self._latest_realtime_state
+        if (
+            not self.settings_window.auto_walk_toggle.isChecked()
+            or not self._realtime_capture_requested
+            or self._ev_training_complete()
+            or getattr(self, "_region_placement_active", False) is True
+            or getattr(self, "_region_dialog_active", False) is True
+            or getattr(self, "_region_selection_active", False) is True
+        ):
+            self._auto_walk_controller.stop()
+            return
+        popup_visible = state.get("showingSpecialPokemonMessage", False)
+        if popup_visible is not False or self._special_pokemon_message_controller.blocked:
+            if popup_visible is True:
+                reason = "paused: Special Pokemon Message is visible."
+            elif popup_visible is not False:
+                reason = "paused: Special Pokemon Message OCR is uncertain."
+            else:
+                reason = "paused: confirming Special Pokemon Message dismissal."
+            self._auto_walk_controller.stop(reason=reason)
+            return
+        # The same confirmed battle-end state used by fishing prevents a brief
+        # OCR dropout from resuming overworld movement during an encounter.
+        if self._fishing_battle_active is True and state.get("onBattleMode") is False:
+            self._auto_walk_controller.stop(
+                reason="paused: waiting for battle-end confirmation (onBattleMode=false).",
+            )
+            return
+        battle_mode = (
+            True if self._fishing_battle_active is True else state.get("onBattleMode")
+        )
+        self._auto_walk_controller.update(
+            enabled=True,
+            on_battle_mode=battle_mode,
+            window_handle=self._target_window_id,
+            direction=self.settings_window.auto_walk_direction_selection.currentText(),
+            duration_mode=(
+                self.settings_window.auto_walk_duration_mode_selection.currentText()
+            ),
+            default_seconds=self.settings_window.auto_walk_duration_spin.value(),
+            minimum_seconds=self.settings_window.auto_walk_min_duration_spin.value(),
+            maximum_seconds=self.settings_window.auto_walk_max_duration_spin.value(),
+        )
+
+    def _classify_encounter(
+        self, pokemon_name: str, state: dict[str, object] | None = None,
+    ) -> str | None:
+        if state is None:
+            state = self._latest_realtime_state
         if state.get("wildPokemonIsShiny") is True:
             return "shiny"
         if state.get("wildPokemonIsElite") is True:
@@ -2207,16 +2940,10 @@ class OverlayWindow(QWidget):
         ):
             return None
 
-        normalised_name = self._normalise_wild_pokemon_name(pokemon_name)
-        for desired_name in self.settings_window.desired_pokemon_input.text().split(","):
-            desired_name = desired_name.strip()
-            if desired_name and re.search(
-                rf"(?<!\w){re.escape(desired_name)}(?!\w)",
-                normalised_name,
-                re.IGNORECASE,
-            ):
-                return "desired"
-        return None
+        return "desired" if match_pokemon_target(
+            pokemon_name, self.settings_window.desired_pokemon_input.text(),
+            nature_match=self._encounter_nature_match({**state, "wildPokemonName": pokemon_name}),
+        ) is not None else None
 
     def _play_encounter_sound(self, category: str) -> None:
         sound_settings = {
@@ -2240,7 +2967,7 @@ class OverlayWindow(QWidget):
         if not sound_path:
             self.region_test_log_window.append_entry(
                 "WARNING",
-                f"The {category} Pokemon sound is enabled but no WAV file is selected.",
+                f"The {category} Pokemon sound is enabled but no audio file is selected.",
             )
             return
         if not Path(sound_path).is_file():
@@ -2291,31 +3018,11 @@ class OverlayWindow(QWidget):
 
     @staticmethod
     def _normalise_wild_pokemon_name(name: object) -> str:
-        if not isinstance(name, str):
-            return ""
-        normalised_name = re.sub(
-            r"^\s*(?:(?:a\s+)?wild(?:\s+pokemon)?\s*[:\-]?\s*)?",
-            "",
-            name,
-            flags=re.IGNORECASE,
-        )
-        return re.sub(
-            r"^\s*(?:\[S\]\s*)?(?:\[E\]\s*)?(?:Elite\s+)?",
-            "",
-            normalised_name,
-            flags=re.IGNORECASE,
-        ).strip()
+        return normalise_wild_pokemon_name(name)
 
     @staticmethod
-    def _wild_pokemon_identity(name: str) -> str:
-        identity = re.split(r"\s*[|,;\n]\s*", name, maxsplit=1)[0]
-        identity = re.sub(
-            r"\s+(?:appeared|level\s+\d+|lv\.?\s*\d+)\b.*$",
-            "",
-            identity,
-            flags=re.IGNORECASE,
-        )
-        return identity.strip().casefold()
+    def _wild_pokemon_identity(name: object) -> str:
+        return pokemon_species_name(name).casefold()
 
     def _on_desired_pokemon_stop_toggled(self, enabled: bool) -> None:
         if not enabled:
